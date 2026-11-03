@@ -1,0 +1,48 @@
+{
+  "rules_version": "2026.11",
+  "service": "QRKSDock",
+  "ticket": {
+    "prefix": "QDOCK",
+    "test_prefix": "TEST",
+    "folder_brackets": true
+  },
+  "tiers": {
+    "Hadron":  {"small_molecules": 5,  "peptides": 5,  "ppi_pairs": 1, "tat": "3-5 business days"},
+    "Fermion": {"small_molecules": 10, "peptides": 10, "ppi_pairs": 3, "tat": "7-10 business days"},
+    "Boson":   {"small_molecules": 20, "peptides": 20, "ppi_pairs": 5, "tat": "21 business days"}
+  },
+  "peptide": {"min_residues": 2, "max_residues": 6, "max_mass_da": 3000},
+  "roster": [
+    {"initials": "LEM", "name": "Lars E. Medice, RCh",     "role": "Technical Lead"},
+    {"initials": "JER", "name": "John E. Rico",            "role": "Operations Lead"},
+    {"initials": "LPA", "name": "Lester P. Abdon",         "role": "Sales Lead"},
+    {"initials": "JCG", "name": "Josiah C. Guillermo, RCh","role": "Finance Lead"},
+    {"initials": "JML", "name": "Jason M. Llamera",        "role": "Documentations Lead"},
+    {"initials": "ERD", "name": "Erwin R. Desaliza",       "role": "Marketing Lead"}
+  ],
+  "flags": {
+    "activated_paid":  {"label": "Activated & paid",  "who": ["JCG"]},
+    "qa_passed":       {"label": "QA passed",         "who": ["JER"]},
+    "balance_cleared": {"label": "Balance cleared",   "who": ["JCG"]},
+    "report_signed":   {"label": "Report signed",     "who": ["LEM"]}
+  },
+  "permissions": {
+    "create_ticket": ["LEM", "JML", "JER"],
+    "run_docking": ["LEM"],
+    "generate_report": ["LEM"]
+  },
+  "docking": {
+    "ph": 7.4,
+    "seed": 42,
+    "num_modes": 9,
+    "energy_range": 3,
+    "redock_rmsd_threshold_angstrom": 2.0,
+    "contact_cutoff_angstrom": 4.0,
+    "polar_contact_cutoff_angstrom": 3.5,
+    "box_padding_ligand": 8.0,
+    "box_padding_blind": 5.0,
+    "box_min_size": 20.0,
+    "max_states_per_ligand": 4,
+    "max_stereoisomers": 8
+  }
+}

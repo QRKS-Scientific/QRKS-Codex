@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+# Vina executables are downloaded by scripts/fetch_vina.py, not committed
+bin/vina
+bin/vina.exe
+# Client data must NEVER be committed
+tickets/
+*.smi.local
