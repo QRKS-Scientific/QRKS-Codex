@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qrksdock"
+dynamic = ["version"]
+description = "QRKSDock Desktop: protein-ligand docking workflow for QRKS Scientific (AutoDock Vina)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "PySide6-Essentials==6.12.0",
+  "rdkit==2026.9.1",
+  "meeko==0.8.0",
+  "molscrub==0.3.2",
+  "pdb2pqr==3.8.0",
+  "propka==3.5.1",
+  "reportlab==4.4.10",
+  "numpy",
+  "scipy",
+  "gemmi",
+  "pillow",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pypdf", "pyinstaller==6.22.3"]
+
+[project.scripts]
+qrksdock = "qrksdock.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "qrksdock.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+qrksdock = ["data/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
