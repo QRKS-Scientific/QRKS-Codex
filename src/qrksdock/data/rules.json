@@ -1,11 +1,6 @@
 {
-  "rules_version": "2026.11",
+  "rules_version": "2026.11.1",
   "service": "QRKSDock",
-  "ticket": {
-    "prefix": "QDOCK",
-    "test_prefix": "TEST",
-    "folder_brackets": true
-  },
   "tiers": {
     "Hadron": {
       "small_molecules": 5,
@@ -63,45 +58,6 @@
       "role": "Marketing Lead"
     }
   ],
-  "flags": {
-    "activated_paid": {
-      "label": "Activated & paid",
-      "who": [
-        "JCG"
-      ]
-    },
-    "qa_passed": {
-      "label": "QA passed",
-      "who": [
-        "JER"
-      ]
-    },
-    "balance_cleared": {
-      "label": "Balance cleared",
-      "who": [
-        "JCG"
-      ]
-    },
-    "report_signed": {
-      "label": "Report signed",
-      "who": [
-        "LEM"
-      ]
-    }
-  },
-  "permissions": {
-    "create_ticket": [
-      "LEM",
-      "JML",
-      "JER"
-    ],
-    "run_docking": [
-      "LEM"
-    ],
-    "generate_report": [
-      "LEM"
-    ]
-  },
   "docking": {
     "ph": 7.4,
     "num_modes": 10,
@@ -115,5 +71,9 @@
     "max_states_per_ligand": 4,
     "max_stereoisomers": 8,
     "ligand_prep_seed": 42
+  },
+  "codes": {
+    "client_example": "QC-001",
+    "run_example": "QDOCK-260824-001"
   }
 }

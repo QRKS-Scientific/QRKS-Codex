@@ -58,10 +58,10 @@ def format_check(items: list[dict[str, Any]]) -> str:
 
 
 def selftest(log=print) -> dict[str, Any]:
-    """Tiny end-to-end run on a test ticket: receptor, ligand, Vina, results, PDF report."""
+    """Tiny end-to-end job in a temporary folder: receptor, ligand, Vina, results, PDF report."""
     from qrksdock.core.pipeline import DockParams, Project
     from qrksdock.core.report import generate_report
-    from qrksdock.core.tickets import Ticket
+    from qrksdock.core.runs import Run
 
     t0 = time.time()
     steps: list[dict[str, Any]] = []
@@ -82,11 +82,11 @@ def selftest(log=print) -> dict[str, Any]:
                                       (_ for _ in ()).throw(RuntimeError(format_check([i for i in c if not i["ok"]]))))(system_check()))
         tmp = Path(tempfile.mkdtemp(prefix="qrksdock_selftest_"))
 
-        def make_ticket():
-            state["ticket"] = Ticket.create(tmp, "Hadron", "LEM", test=True)
-            state["project"] = Project(state["ticket"], "LEM")
-            return state["ticket"].id
-        step("create test ticket", make_ticket)
+        def make_run():
+            state["run"] = Run.create(tmp, "QC-000", "LEM")
+            state["project"] = Project(state["run"], "LEM")
+            return f"{state['run'].client} / {state['run'].code}"
+        step("create run (client and QDOCK codes)", make_run)
         proj: Project = state["project"]
         step("receptor: pdb2pqr/PROPKA + Meeko", lambda: proj.prepare_receptor(
             paths.asset("selftest", "mini_receptor.pdb"), box_mode="blind")["box"].summary())
@@ -94,8 +94,8 @@ def selftest(log=print) -> dict[str, Any]:
             "C1=CC=C(C(=C1)C(=O)C[C@@H](C(=O)O)N)N L-kynurenine\n", "GW dipeptide_GW\n")))
         step("docking: AutoDock Vina", lambda: [f"{r.state} {r.best_affinity:.2f}" for r in proj.run_docking(
             DockParams(exhaustiveness=2, num_modes=3, cpu=max(1, min(2, os.cpu_count() or 1))))])
-        step("Vina log and exports", lambda: _check_exports(state["ticket"]))
-        step("PDF report", lambda: generate_report(proj, "LEM").name)
+        step("Vina log and exports", lambda: _check_exports(state["run"]))
+        step("PDF report (draft)", lambda: generate_report(proj, "LEM").name)
         step("Qt loads (offscreen)", lambda: _qt_probe())
         ok = True
     except Exception:                                                                # noqa: BLE001
@@ -104,8 +104,8 @@ def selftest(log=print) -> dict[str, Any]:
             "app_version": __version__, "platform": f"{platform.system()} {platform.machine()}"}
 
 
-def _check_exports(ticket) -> str:
-    res = ticket.sub("results")
+def _check_exports(run) -> str:
+    res = run.sub("results")
     log = (res / "vina_output.log").read_text(encoding="utf-8")
     if "mode |   affinity" not in log or "random seed" not in log:
         raise RuntimeError("vina_output.log is missing Vina's result table or seed")

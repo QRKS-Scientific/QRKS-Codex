@@ -9,6 +9,30 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.3.0] - 2026-11-05
+
+### Added
+- Client codes (`QC-001`) and QDOCK codes (`QDOCK-260824-001`, serial unique per day across all clients). A run lives in `<runs folder>/QC-001/QDOCK-260824-001/` with `input/`, `work/`, `results/`, `reports/` and `logs/`.
+- **Project** page: create a run, open a run, and see every run in the runs folder with its stage, ligand count and best affinity. Double-click a run to open it.
+- A folder made by hand (a `QDOCK-...` folder inside a `QC-...` folder) is adopted when opened.
+- Optional package (Hadron, Fermion, Boson): limits are checked only when a package is chosen.
+- Report type choice on the Results page: **Draft** (diagonal watermark, the default) or **Final** (no watermark).
+- `logs/activity.jsonl`: a plain record of who did what and when.
+
+### Changed
+- Any lead can run any step. The operator is recorded in the activity log and the manifest; nothing is blocked.
+- Manifest records `qdock_code`, `client_code` and `package` instead of ticket fields.
+- Report: header shows client and QDOCK codes; file names are `<QDOCK code>_Technical_Report_DRAFT.pdf` or `_FINAL.pdf`.
+- Folder names no longer use square brackets.
+
+### Removed (breaking)
+- The ticket system: `ticket.json`, status flags (activated and paid, QA passed, balance cleared, report signed), the payment gate, role permissions, per-event files, and test tickets.
+- The Integrity Seal and the sign-off block in the report (pulled forward from the report phase because they depended on the ticket flags).
+
+### Migration
+- Folders created by 0.1.0 or 0.2.0 (ticket folders) cannot be opened by 0.3.0. No production data existed, so no converter is provided.
+- Next: v0.4.0 adds the login screen and the UI redesign.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

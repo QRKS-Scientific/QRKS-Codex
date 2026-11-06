@@ -32,18 +32,6 @@ def role_of(initials: str) -> str:
     return ""
 
 
-def can(initials: str, action: str) -> bool:
-    return initials in load()["permissions"].get(action, [])
-
-
-def flag_defs() -> dict[str, dict[str, Any]]:
-    return load()["flags"]
-
-
-def can_set_flag(initials: str, flag: str) -> bool:
-    return initials in flag_defs()[flag]["who"]
-
-
 def docking_defaults() -> dict[str, Any]:
     return load()["docking"]
 

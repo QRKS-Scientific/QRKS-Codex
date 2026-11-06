@@ -7,12 +7,9 @@ from typing import Any, Callable
 from PySide6.QtCore import QThread, Signal
 
 from qrksdock.core.pipeline import Cancelled
-from qrksdock.core.tickets import PermissionDenied
 
 
 def friendly(exc: Exception) -> str:
-    if isinstance(exc, PermissionDenied):
-        return str(exc)
     return f"{exc}" or exc.__class__.__name__
 
 

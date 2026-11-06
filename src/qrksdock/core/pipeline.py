@@ -1,8 +1,8 @@
-"""The QRKSDock workflow, from ticket to results.
+"""The QRKSDock workflow, from run folder to results.
 
 `Project` is what the GUI and the command line both drive. It keeps its state in
-`work/state.json` inside the ticket folder, so closing the app and reopening the ticket
-picks up where you left off. Paths are stored relative to the ticket folder so the folder
+`work/state.json` inside the run folder, so closing the app and reopening the run
+picks up where you left off. Paths are stored relative to the run folder so the folder
 can move between laptops and Google Drive.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from qrksdock import __version__
 from qrksdock.core import box as boxmod
 from qrksdock.core import contacts, ligands, manifest, receptor, rules, thermo, validation, vina_runner
 from qrksdock.core.box import Box
-from qrksdock.core.tickets import Ticket
+from qrksdock.core.runs import Run
 
 Log = Callable[[str], None]
 Progress = Callable[[float, str], None]
@@ -80,8 +80,8 @@ def _noop_progress(_f: float, _m: str) -> None:
 
 
 class Project:
-    def __init__(self, ticket: Ticket, actor: str):
-        self.ticket = ticket
+    def __init__(self, run: Run, actor: str):
+        self.run = run
         self.actor = actor
         self.s: dict[str, Any] = {}
         self.load()
@@ -89,7 +89,7 @@ class Project:
     # ---- persistence ----------------------------------------------------------------
     @property
     def state_file(self) -> Path:
-        return self.ticket.sub("work") / "state.json"
+        return self.run.sub("work") / "state.json"
 
     def load(self) -> None:
         if self.state_file.exists():
@@ -104,10 +104,10 @@ class Project:
         tmp.replace(self.state_file)
 
     def _rel(self, p: Path | str) -> str:
-        return Path(p).resolve().relative_to(self.ticket.path.resolve()).as_posix()
+        return Path(p).resolve().relative_to(self.run.path.resolve()).as_posix()
 
     def _abs(self, rel: str) -> Path:
-        return self.ticket.path / rel
+        return self.run.path / rel
 
     # ---- state accessors ----------------------------------------------------------------
     @property
@@ -150,11 +150,11 @@ class Project:
                          ph: float = 7.4, box_mode: str = "blind", reference_path: Path | None = None,
                          manual_box: tuple[tuple, tuple] | None = None, allow_bad_res: bool = False,
                          log: Log = _noop_log) -> dict[str, Any]:
-        inp = self.ticket.sub("input")
+        inp = self.run.sub("input")
         src = inp / f"receptor_original{Path(pdb_path).suffix or '.pdb'}"
         if Path(pdb_path).resolve() != src.resolve():
             shutil.copy2(pdb_path, src)
-        work = self.ticket.sub("work")
+        work = self.run.sub("work")
         rec_dir = work / "receptor"
         if rec_dir.exists():
             shutil.rmtree(rec_dir)
@@ -196,7 +196,7 @@ class Project:
         for k in ("validation", "results"):                     # downstream results are now stale
             self.s.pop(k, None)
         self.save()
-        self.ticket.add_event(self.actor, "receptor_prepared", {"method": method, "ph": ph, "box": box.mode})
+        self.run.log(self.actor, "receptor_prepared", {"method": method, "ph": ph, "box": box.mode})
         log(box.summary())
         return {"box": box, "warnings": warnings, "recommended_exhaustiveness": boxmod.recommended_exhaustiveness(box)}
 
@@ -212,14 +212,14 @@ class Project:
         if bad:
             raise PipelineError("Fix these ligands first:\n" + "\n".join(f"  {c.name}: {'; '.join(c.errors)}" for c in bad))
         n_small = sum(1 for i in inputs if i.kind == "small_molecule")
-        issues = self.ticket.check_limits(n_small, len(inputs) - n_small)
+        issues = self.run.check_limits(n_small, len(inputs) - n_small)
         if issues:
             raise PipelineError("Package limit exceeded:\n  " + "\n  ".join(issues))
 
-        inp = self.ticket.sub("input")
+        inp = self.run.sub("input")
         (inp / "ligands_small_molecules.smi").write_text(small_text, encoding="utf-8")
         (inp / "ligands_peptides.txt").write_text(peptide_text, encoding="utf-8")
-        lig_dir = self.ticket.sub("work") / "ligands"
+        lig_dir = self.run.sub("work") / "ligands"
         if lig_dir.exists():
             shutil.rmtree(lig_dir)
 
@@ -241,7 +241,7 @@ class Project:
         for k in ("validation", "results"):
             self.s.pop(k, None)
         self.save()
-        self.ticket.add_event(self.actor, "ligands_prepared", {"ligands": len(inputs), "states": len(prepared)})
+        self.run.log(self.actor, "ligands_prepared", {"ligands": len(inputs), "states": len(prepared)})
         return checks
 
     # ---- shared docking plumbing -----------------------------------------------------------
@@ -266,10 +266,9 @@ class Project:
                        ) -> validation.ValidationResult:
         if not (self.receptor_ready and self.reference_ready and self.box):
             raise PipelineError("Validation needs a prepared receptor and a reference ligand.")
-        self.ticket.check_can_run(self.actor)
         exe, _ = self._exe(vina_path)
         ref = self.load_reference()
-        out_dir = self.ticket.sub("work") / "validation"
+        out_dir = self.run.sub("work") / "validation"
         out_dir.mkdir(exist_ok=True)
         log("Redocking the reference ligand")
         run = self._vina(exe, ref.pdbqt, out_dir / "redock_out.pdbqt", params,
@@ -279,7 +278,7 @@ class Project:
         self.s["validation"] = asdict(val)
         self.s["validation_params"] = {**asdict(params), "seed_used": run.seed}
         self.save()
-        self.ticket.add_event(self.actor, "validation_completed", {"rmsd_top": round(val.rmsd_top, 3), "passed": val.passed})
+        self.run.log(self.actor, "validation_completed", {"rmsd_top": round(val.rmsd_top, 3), "passed": val.passed})
         log(val.text())
         return val
 
@@ -288,10 +287,9 @@ class Project:
                     progress: Progress = _noop_progress, cancel: threading.Event | None = None) -> list[LigandResult]:
         if not (self.receptor_ready and self.ligands_ready and self.box):
             raise PipelineError("Prepare the receptor and the ligands before docking.")
-        self.ticket.check_can_run(self.actor)
         exe, vina_ver = self._exe(vina_path)
         prepared = self.s["prepared"]
-        dock_dir = self.ticket.sub("work") / "docking"
+        dock_dir = self.run.sub("work") / "docking"
         (dock_dir / "logs").mkdir(parents=True, exist_ok=True)
         rec_pdb = self._abs(self.s["receptor"]["protonated_pdb"])
         results: list[LigandResult] = []
@@ -323,7 +321,7 @@ class Project:
         self.save()
         run_id = self._write_manifest(params, vina_ver)
         self.export_results()
-        self.ticket.add_event(self.actor, "run_completed", {"run_id": run_id, "ligands": n, "vina": vina_ver})
+        self.run.log(self.actor, "run_completed", {"run_id": run_id, "ligands": n, "vina": vina_ver})
         log(f"Run complete. Run ID {run_id}")
         return results
 
@@ -356,7 +354,7 @@ class Project:
             self.s.setdefault("names", {})[ligand_id] = clean
             self.save()
             self.export_results()
-            self.ticket.add_event(self.actor, "ligand_renamed", {"from": old, "to": clean})
+            self.run.log(self.actor, "ligand_renamed", {"from": old, "to": clean})
         return clean
 
     # ---- outputs ----------------------------------------------------------------------------------------
@@ -372,7 +370,7 @@ class Project:
         results = self.results
         if not results:
             return
-        res_dir = self.ticket.sub("results")
+        res_dir = self.run.sub("results")
         ordered = sorted(results, key=lambda r: r.best_affinity)
         ncol = max(len(r.affinities) for r in results)
         with open(res_dir / "results.csv", "w", newline="", encoding="utf-8") as f:
@@ -410,7 +408,7 @@ class Project:
                 w.close()
             except Exception:                                  # noqa: BLE001
                 pass
-        header = (f"# QRKSDock {__version__} | {self.ticket.id} | run {self.s.get('run_id', '')}\n"
+        header = (f"# QRKSDock {__version__} | {self.run.client} | {self.run.code} | run {self.s.get('run_id', '')}\n"
                   "# Raw AutoDock Vina console output for each ligand follows, unmodified.\n")
         parts = [header]
         for r in results:
@@ -418,7 +416,7 @@ class Project:
             if r.log and raw.exists():
                 parts.append(f"\n# ===== {self.display_state(r)} (Vina seed {r.seed}) =====\n" + raw.read_text(encoding="utf-8"))
         (res_dir / "vina_output.log").write_text("".join(parts), encoding="utf-8")
-        val_log = self.ticket.sub("work") / "validation" / "redock_vina.log"
+        val_log = self.run.sub("work") / "validation" / "redock_vina.log"
         if val_log.exists():
             shutil.copy2(val_log, res_dir / "validation_vina_output.log")
         mpath = res_dir / "manifest.json"
@@ -426,16 +424,16 @@ class Project:
             manifest.update_manifest(mpath, display_names=self.s.get("names", {}))
 
     def _write_manifest(self, params: DockParams, vina_ver: str) -> str:
-        res_dir = self.ticket.sub("results")
+        res_dir = self.run.sub("results")
         files = {"receptor_original": self._abs(self.s["receptor"]["source"]),
                  "receptor_pdbqt": self._abs(self.s["receptor"]["pdbqt"])}
         for r in self.results:
             files[f"poses_{r.state}"] = self._abs(r.out_pdbqt)
             files[f"vina_log_{r.state}"] = self._abs(r.log)
         for name in ("ligands_small_molecules.smi", "ligands_peptides.txt"):
-            files[name] = self.ticket.sub("input") / name
+            files[name] = self.run.sub("input") / name
         payload = {
-            "ticket_id": self.ticket.id, "tier": self.ticket.tier, "test_ticket": self.ticket.is_test,
+            "qdock_code": self.run.code, "client_code": self.run.client, "package": self.run.package or None,
             "operator": self.actor, "operator_role": rules.role_of(self.actor),
             "environment": manifest.environment(vina_ver), "parameters": asdict(params),
             "vina_seeds": {r.state: r.seed for r in self.results},

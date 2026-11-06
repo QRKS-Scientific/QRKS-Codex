@@ -9,7 +9,7 @@ from qrksdock import paths
 from qrksdock.core import thermo
 from qrksdock.core import vina_runner as V
 from qrksdock.core.pipeline import DockParams, PipelineError, Project
-from qrksdock.core.tickets import Ticket
+from qrksdock.core.runs import Run
 
 SMALL = "CC(C)Cc1ccc(cc1)C(C)C(=O)O  ibuprofen\nCCO ethanol\n"
 PEPT = "GW dipeptide_GW\n"
@@ -18,7 +18,7 @@ PEPT = "GW dipeptide_GW\n"
 @pytest.fixture(scope="module")
 def run_dir(tmp_path_factory, vina_exe):
     root = tmp_path_factory.mktemp("p1")
-    t = Ticket.create(root, "Hadron", "LEM", test=True)
+    t = Run.create(root, "QC-001", "LEM", package="Hadron")
     p = Project(t, "LEM")
     p.prepare_receptor(paths.asset("selftest", "mini_receptor.pdb"), box_mode="blind")
     p.prepare_ligands(SMALL, PEPT)
@@ -30,7 +30,7 @@ def run_dir(tmp_path_factory, vina_exe):
 def project(run_dir, tmp_path):
     dest = tmp_path / "copy"
     shutil.copytree(run_dir, dest)
-    return Project(Ticket.open(dest), "LEM")
+    return Project(Run.open(dest), "LEM")
 
 
 # ---- thermodynamics ---------------------------------------------------------------------------
@@ -90,16 +90,16 @@ def test_csv_exports(run_dir, project):
 
 # ---- renaming --------------------------------------------------------------------------------------------
 def test_rename_flows_to_every_output(project):
-    run_id = json.loads((project.ticket.path / "results" / "manifest.json").read_text())["run_id"]
+    run_id = json.loads((project.run.path / "results" / "manifest.json").read_text())["run_id"]
     assert project.rename_ligand("ibuprofen", "Ibuprofen racemic") == "Ibuprofen_racemic"     # spaces become underscores
-    res = project.ticket.path / "results"
+    res = project.run.path / "results"
     names = [r["ligand"] for r in csv.DictReader(open(res / "results.csv", encoding="utf-8"))]
     assert "Ibuprofen_racemic" in names and "ibuprofen" not in names
     assert (res / "poses" / "Ibuprofen_racemic_poses.sdf").exists() and not (res / "poses" / "ibuprofen_poses.sdf").exists()
     assert "Ibuprofen_racemic" in (res / "vina_output.log").read_text(encoding="utf-8")
     man = json.loads((res / "manifest.json").read_text())
     assert man["run_id"] == run_id and man["display_names"] == {"ibuprofen": "Ibuprofen_racemic"}
-    again = Project(Ticket.open(project.ticket.path), "LEM")                                      # survives reopening
+    again = Project(Run.open(project.run.path), "LEM")                                      # survives reopening
     assert again.display_ligand("ibuprofen") == "Ibuprofen_racemic"
 
 

@@ -13,19 +13,19 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFileDialog, QF
 from qrksdock import __version__, brand, paths
 from qrksdock.core import diagnostics, rules
 from qrksdock.core.pipeline import Project
-from qrksdock.core.tickets import Ticket
+from qrksdock.core.runs import Run
 from qrksdock.gui import theme
-from qrksdock.gui.pages import DockingPage, LigandsPage, ReceptorPage, ResultsPage, TicketPage, button, label, mono
+from qrksdock.gui.pages import DockingPage, LigandsPage, ReceptorPage, ProjectPage, ResultsPage, button, label, mono
 from qrksdock.gui.workers import Worker
 
-NAMES = ["Ticket", "Receptor", "Ligands", "Docking", "Results"]
+NAMES = ["Project", "Receptor", "Ligands", "Docking", "Results"]
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.settings = QSettings("QRKS Scientific", "QRKSDock")
-        self.ticket: Ticket | None = None
+        self.run: Run | None = None
         self.project: Project | None = None
         self.busy = False
         self.worker: Worker | None = None
@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
         for n in NAMES:
             self.rail.addItem(QListWidgetItem(theme.step_icon(False), n))
         self.stack = QStackedWidget()
-        self.pages = [TicketPage(self), ReceptorPage(self), LigandsPage(self), DockingPage(self), ResultsPage(self)]
+        self.pages = [ProjectPage(self), ReceptorPage(self), LigandsPage(self), DockingPage(self), ResultsPage(self)]
         for p in self.pages:                                              # scroll instead of clipping on small screens
             sa = QScrollArea()
             sa.setWidgetResizable(True)
@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
         v.addLayout(body, 1)
         self.setCentralWidget(root)
 
-        self.status_lbl = QLabel("Open or create a ticket to begin.")
+        self.status_lbl = QLabel("Create or open a run to begin.")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setFixedWidth(260)
@@ -94,8 +94,8 @@ class MainWindow(QMainWindow):
         logo.setPixmap(pm.scaledToHeight(34, Qt.SmoothTransformation))
         lay.addWidget(logo)
         lay.addStretch(1)
-        self.ticket_chip = label("No ticket open", "chip", False)
-        lay.addWidget(self.ticket_chip)
+        self.run_chip = label("No run open", "chip", False)
+        lay.addWidget(self.run_chip)
         lay.addSpacing(14)
         lay.addWidget(label("Signed in as", "muted", False))
         self.op_combo = QComboBox()
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         mb = self.menuBar()
         f = mb.addMenu("&File")
-        a_open = QAction("Open ticket folder…", self)
+        a_open = QAction("Open run folder…", self)
         a_open.triggered.connect(self.pages[0]._open)
         a_quit = QAction("Quit", self)
         a_quit.triggered.connect(self.close)
@@ -129,10 +129,10 @@ class MainWindow(QMainWindow):
     def goto(self, name: str) -> None:
         self.rail.setCurrentRow(NAMES.index(name))
 
-    def set_ticket(self, ticket: Ticket) -> None:
-        self.ticket = ticket
-        self.project = Project(ticket, self.operator)
-        self.status_lbl.setText(f"Ticket {ticket.id} ready.")
+    def set_run(self, run: Run) -> None:
+        self.run = run
+        self.project = Project(run, self.operator)
+        self.status_lbl.setText(f"Run {run.code} ({run.client}) ready.")
         for p in self.pages:
             if isinstance(p, DockingPage):
                 p.log.clear()
@@ -146,19 +146,19 @@ class MainWindow(QMainWindow):
             self.project.actor = self.operator
         self.refresh()
 
-    def require_ticket(self) -> bool:
+    def require_run(self) -> bool:
         if self.busy:
             QMessageBox.information(self, "Please wait", "A job is still running.")
             return False
-        if not self.ticket or not self.project:
-            QMessageBox.information(self, "No ticket", "Open or create a ticket first.")
-            self.goto("Ticket")
+        if not self.run or not self.project:
+            QMessageBox.information(self, "No run", "Create or open a run first.")
+            self.goto("Project")
             return False
         return True
 
     def refresh(self) -> None:
-        t, p = self.ticket, self.project
-        self.ticket_chip.setText(f"{t.id}  |  {t.tier}" if t else "No ticket open")
+        t, p = self.run, self.project
+        self.run_chip.setText(t.label if t else "No run open")
         done = [bool(t), bool(p and p.receptor_ready), bool(p and p.ligands_ready), bool(p and p.results),
                 bool(t and any(t.sub("reports").glob("*.pdf")))]
         for i, d in enumerate(done):

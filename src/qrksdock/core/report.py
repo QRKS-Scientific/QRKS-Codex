@@ -1,9 +1,7 @@
 """Branded PDF technical report (clinical/institutional track: no mascot).
 
-Rules from the QRKS portfolio, enforced here:
-  * The Integrity Seal appears only when the ticket's QA audit has passed AND the Technical
-    Lead has signed. Never on drafts, never on test tickets.
-  * Deliverables stay watermarked until the Finance Lead clears the balance.
+A report is either a DRAFT (diagonal watermark on every page) or FINAL (no watermark). The person
+generating it chooses; the app does not decide. There is no Integrity Seal.
 The report states results and methods only. It does not interpret results for the client.
 """
 from __future__ import annotations
@@ -96,21 +94,11 @@ def _p(text, style):
     return Paragraph(str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"), style)
 
 
-def _status_line(state: dict) -> str:
-    if state["test"]:
-        return "TEST TICKET - not a client deliverable"
-    if state["watermark"]:
-        return "WATERMARKED PREVIEW - final files are released after the balance is settled"
-    return "Final deliverable" if state["seal"] else "Final files released - QA audit or signature still pending"
-
-
-def generate_report(project: Project, actor: str, out_path: Path | None = None) -> Path:
-    t = project.ticket
-    t.check_can_report(actor)
+def generate_report(project: Project, actor: str, final: bool = False, out_path: Path | None = None) -> Path:
+    t = project.run
     results = project.best_per_ligand()
     if not results:
         raise ValueError("Run docking before generating a report.")
-    rstate = t.report_state()
     reg, sb, bold = _register_fonts()
     S = _styles(reg, sb, bold)
     s = project.s
@@ -118,12 +106,10 @@ def generate_report(project: Project, actor: str, out_path: Path | None = None) 
     params = s.get("dock_params", {})
     box = project.box
     val = project.validation
-    suffix = "_TEST" if rstate["test"] else ("_PREVIEW" if rstate["watermark"] else "")
-    out_path = out_path or (t.sub("reports") / f"{t.id}_QRKSDock_Technical_Report{suffix}.pdf")
+    out_path = out_path or (t.sub("reports") / f"{t.code}_Technical_Report_{'FINAL' if final else 'DRAFT'}.pdf")
 
     logo = paths.asset("logos", "qrks_horizontal.png")
-    seal = paths.asset("logos", "emblem.png")
-    watermark_text = "TEST - NOT FOR RELEASE" if rstate["test"] else ("WATERMARKED PREVIEW" if rstate["watermark"] else "")
+    watermark_text = "" if final else "DRAFT - NOT FOR RELEASE"
 
     def on_page(canvas, doc):
         w, h = A4
@@ -140,7 +126,7 @@ def generate_report(project: Project, actor: str, out_path: Path | None = None) 
         canvas.drawImage(str(logo), 18 * mm, h - 19 * mm, width=33 * mm, height=33 * mm * 0.3049, mask="auto")
         canvas.setFont(sb, 8)
         canvas.setFillColor(C_MUTED)
-        canvas.drawRightString(w - 18 * mm, h - 14 * mm, f"QRKSDock Technical Report  |  {t.id}")
+        canvas.drawRightString(w - 18 * mm, h - 14 * mm, f"QRKSDock Technical Report  |  {t.client}  |  {t.code}")
         canvas.setStrokeColor(C_SKY)
         canvas.setLineWidth(1.4)
         canvas.line(18 * mm, h - 22 * mm, w - 18 * mm, h - 22 * mm)
@@ -150,7 +136,7 @@ def generate_report(project: Project, actor: str, out_path: Path | None = None) 
         canvas.restoreState()
 
     doc = BaseDocTemplate(str(out_path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
-                          topMargin=28 * mm, bottomMargin=18 * mm, title=f"QRKSDock Technical Report {t.id}",
+                          topMargin=28 * mm, bottomMargin=18 * mm, title=f"QRKSDock Technical Report {t.code}",
                           author="QRKS Scientific", subject="Molecular docking technical report")
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="f")
     doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=on_page)])
@@ -161,10 +147,10 @@ def generate_report(project: Project, actor: str, out_path: Path | None = None) 
     story += [Paragraph("Molecular Docking Technical Report", S["title"]),
               Paragraph("Protein-ligand docking with AutoDock Vina", S["sub"]), Spacer(1, 8)]
     meta = [
-        [_p("Ticket", S["cellb"]), _p(t.id, S["cell"]), _p("Package tier", S["cellb"]), _p(t.tier, S["cell"])],
+        [_p("QDOCK code", S["cellb"]), _p(t.code, S["cell"]), _p("Client code", S["cellb"]), _p(t.client, S["cell"])],
         [_p("Prepared by", S["cellb"]), _p(f"{actor} ({rules.role_of(actor)})", S["cell"]),
          _p("Report date", S["cellb"]), _p(datetime.now(timezone.utc).strftime("%d %B %Y"), S["cell"])],
-        [_p("Run ID", S["cellb"]), _p(s.get("run_id", "n/a"), S["cell"]), _p("Status", S["cellb"]), _p(_status_line(rstate), S["cell"])],
+        [_p("Run ID", S["cellb"]), _p(s.get("run_id", "n/a"), S["cell"]), _p("Status", S["cellb"]), _p("Final" if final else "Draft (watermarked)", S["cell"])],
     ]
     story.append(_table(meta, [24 * mm, 56 * mm, 26 * mm, W - 106 * mm], header=False, zebra=False))
 
@@ -267,29 +253,16 @@ def generate_report(project: Project, actor: str, out_path: Path | None = None) 
     man_path = t.sub("results") / "manifest.json"
     man = json.loads(man_path.read_text(encoding="utf-8")) if man_path.exists() else {}
     env = man.get("environment", {})
-    story.append(_p(f"Run ID {man.get('run_id', 'n/a')}. The run manifest (manifest.json in the ticket folder) records software versions, all parameters, "
+    story.append(_p(f"Run ID {man.get('run_id', 'n/a')}. The run manifest (manifest.json in the run folder) records software versions, all parameters, "
                     "the random seed, and SHA-256 hashes of the inputs and outputs, so this analysis can be repeated and verified.", S["body"]))
     story.append(Spacer(1, 5))
     sw = [[_p(k, S["cellb"]), _p(v, S["cell"])] for k, v in env.items() if k in ("qrksdock", "autodock_vina", "rdkit", "meeko", "molscrub", "pdb2pqr", "propka")]
     if sw:
         story.append(_table(sw, [40 * mm, W - 40 * mm], header=False))
 
-    # ---- sign-off -----------------------------------------------------------------------------------------------------
-    f = rstate["flags"]
-    sign_rows = [[_p("Technical Lead (LEM)", S["cellb"]), _p("Signed" if f["report_signed"] else "Signature pending", S["cell"])],
-                 [_p("QA audit (JER)", S["cellb"]), _p("Passed" if f["qa_passed"] else "Pending", S["cell"])]]
-    sign = _table(sign_rows, [42 * mm, 46 * mm], header=False, zebra=False)
-    if rstate["seal"]:
-        seal_cell = [Image(str(seal), width=26 * mm, height=26 * mm * 1000 / 897), _p("QRKS Scientific Integrity Seal", S["small"])]
-    else:
-        seal_cell = [_p("The Integrity Seal is applied only after the QA audit is passed and the Technical Lead has signed.", S["small"])]
-    story.append(Paragraph("7. Sign-off", S["h2"]))
-    block = Table([[sign, seal_cell]], colWidths=[W - 60 * mm, 60 * mm])
-    block.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(KeepTogether(block))
     story.append(Spacer(1, 10))
     story.append(_p("QRKS Scientific provides computational infrastructure and technical advisory support. This report presents "
                     "computational results and methods; it does not draft or interpret the client's manuscript.", S["small"]))
     doc.build(story)
-    t.add_event(actor, "report_generated", {"file": out_path.name, "seal": rstate["seal"], "watermark": rstate["watermark"]})
+    t.log(actor, "report_generated", {"file": out_path.name, "final": final})
     return out_path

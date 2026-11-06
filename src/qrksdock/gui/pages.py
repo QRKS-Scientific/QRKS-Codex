@@ -17,7 +17,7 @@ from qrksdock.core import box as boxmod
 from qrksdock.core import ligands, receptor, rules, vina_runner
 from qrksdock.core.pipeline import DockParams, Project
 from qrksdock.core.report import generate_report
-from qrksdock.core.tickets import PermissionDenied, Ticket, TicketError
+from qrksdock.core.runs import Run, RunError, list_runs, next_qdock_code
 
 P = brand.ACTIVE
 
@@ -73,6 +73,8 @@ def fill_table(table: QTableWidget, headers: list[str], rows: list[list], row_co
     table.setAlternatingRowColors(not row_colors)
     hh = table.horizontalHeader()
     hh.setSectionResizeMode(QHeaderView.ResizeToContents)
+    hh.setStretchLastSection(True)                       # the header band always spans the full width
+    hh.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     if stretch_col is not None:
         hh.setSectionResizeMode(stretch_col, QHeaderView.Stretch)
         table.setWordWrap(True)
@@ -103,115 +105,122 @@ class Page(QWidget):
 
 
 # ---------------------------------------------------------------------------------------------------
-class TicketPage(Page):
-    title = "Ticket"
-    blurb = "Every docking job lives in a ticket folder, normally inside the client directory on Google Drive."
+class ProjectPage(Page):
+    title = "Project"
+    blurb = ("Every docking run has a client code (QC-001) and a QDOCK code (QDOCK-260824-001). "
+             "A run is a plain folder, so it syncs with Google Drive like any other.")
+    RUN_HEAD = ["Client", "QDOCK code", "Created", "By", "Package", "Stage", "Ligands", "Best (kcal/mol)", "Reports"]
 
     def __init__(self, win):
         super().__init__(win)
         row = QHBoxLayout()
-        self.root_edit = QLineEdit(win.settings.value("tickets_root", str(Path.home() / "Documents" / "QRKS Tickets")))
+        self.root_edit = QLineEdit(win.settings.value("runs_root", str(Path.home() / "Documents" / "QRKS Runs")))
+        self.root_edit.editingFinished.connect(self._root_changed)
         b = button("Browse…", True)
         b.clicked.connect(self._browse_root)
-        row.addWidget(label("Tickets folder", "h2", False))
+        row.addWidget(label("Runs folder", "h2", False))
         row.addWidget(self.root_edit, 1)
         row.addWidget(b)
         self.body.addLayout(row)
 
         row2 = QHBoxLayout()
-        self.tier_combo = QComboBox()
-        self.tier_combo.addItems(rules.tiers())
         self.client_edit = QLineEdit()
-        self.client_edit.setPlaceholderText("Client reference (code or initials, no personal details)")
-        self.open_btn = button("Open ticket folder…")
-        self.new_btn = button("New ticket", True)
-        self.test_btn = button("New test ticket", True)
+        self.client_edit.setPlaceholderText("Client code, e.g. QC-001")
+        self.client_edit.setMinimumWidth(220)
+        self.pkg_combo = QComboBox()
+        self.pkg_combo.addItem("No package limit", "")
+        for t in rules.tiers():
+            lim = rules.tier_limits(t)
+            self.pkg_combo.addItem(f"{t}: {lim['small_molecules']} small molecules, {lim['peptides']} peptides", t)
+        self.pkg_combo.setMinimumContentsLength(34)
+        self.new_btn = button("Create run")
+        self.open_btn = button("Open run folder…", True)
+        self.new_btn.clicked.connect(self._new)
         self.open_btn.clicked.connect(self._open)
-        self.new_btn.clicked.connect(lambda: self._new(False))
-        self.test_btn.clicked.connect(lambda: self._new(True))
-        for w in (self.open_btn, label("or create:", "muted", False), self.tier_combo, self.client_edit, self.new_btn, self.test_btn):
-            row2.addWidget(w, 1 if w is self.client_edit else 0)
+        for w_ in (label("New run for", "muted", False), self.client_edit, self.pkg_combo):
+            row2.addWidget(w_)
+        row2.addStretch(1)
+        row2.addWidget(self.new_btn)
+        row2.addWidget(self.open_btn)
         self.body.addLayout(row2)
+        self.next_lbl = label("", "muted")
+        self.body.addWidget(self.next_lbl)
 
-        self.info = label("No ticket open.", "summary")
+        self.info = label("No run open.", "summary")
         self.body.addWidget(self.info)
 
-        self.flag_grid = QGridLayout()
-        self.flag_grid.setHorizontalSpacing(14)
-        gw = QWidget()
-        gw.setLayout(self.flag_grid)
-        self.body.addWidget(label("Ticket status", "h2"))
-        self.body.addWidget(gw)
-        self.body.addWidget(label("Activity", "h2"))
-        self.events = QPlainTextEdit()
-        self.events.setReadOnly(True)
-        mono(self.events)
-        self.body.addWidget(self.events, 1)
+        self.body.addWidget(label("All runs in this folder (double-click to open)", "h2", False))
+        self.runs = QTableWidget()
+        self.runs.setMinimumHeight(170)
+        self.runs.cellDoubleClicked.connect(self._open_row)
+        self.body.addWidget(self.runs, 2)
+        self.body.addWidget(label("Activity in the open run", "h2", False))
+        self.activity = QPlainTextEdit()
+        self.activity.setReadOnly(True)
+        mono(self.activity)
+        self.body.addWidget(self.activity, 1)
+        self._paths: list[Path] = []
+
+    # ---- folder ---------------------------------------------------------------------------
+    def root(self) -> Path:
+        return Path(self.root_edit.text().strip() or ".").expanduser()
+
+    def _root_changed(self):
+        self.win.settings.setValue("runs_root", str(self.root()))
+        self.refresh()
 
     def _browse_root(self):
-        d = QFileDialog.getExistingDirectory(self, "Choose the tickets folder", self.root_edit.text())
+        d = QFileDialog.getExistingDirectory(self, "Choose the runs folder (for example inside Google Drive)", str(self.root()))
         if d:
             self.root_edit.setText(d)
-            self.win.settings.setValue("tickets_root", d)
+            self._root_changed()
+
+    # ---- create / open ------------------------------------------------------------------------
+    def _new(self):
+        try:
+            run = Run.create(self.root(), self.client_edit.text(), self.win.operator, self.pkg_combo.currentData() or None)
+        except (RunError, OSError) as exc:
+            QMessageBox.warning(self, "New run", str(exc))
+            return
+        self.win.settings.setValue("runs_root", str(self.root()))
+        self.win.set_run(run)
 
     def _open(self):
-        d = QFileDialog.getExistingDirectory(self, "Open a ticket folder", self.root_edit.text())
+        d = QFileDialog.getExistingDirectory(self, "Open a run folder (QDOCK-…)", str(self.root()))
         if d:
-            try:
-                self.win.set_ticket(Ticket.open(Path(d)))
-            except TicketError as exc:
-                QMessageBox.warning(self, "Open ticket", str(exc))
+            self._open_path(Path(d))
 
-    def _new(self, test: bool):
-        root = Path(self.root_edit.text())
-        self.win.settings.setValue("tickets_root", str(root))
+    def _open_row(self, row: int, _col: int):
+        if 0 <= row < len(self._paths):
+            self._open_path(self._paths[row])
+
+    def _open_path(self, path: Path):
         try:
-            self.win.set_ticket(Ticket.create(root, self.tier_combo.currentText(), self.win.operator,
-                                              self.client_edit.text().strip(), test=test))
-        except (TicketError, PermissionDenied, OSError) as exc:
-            QMessageBox.warning(self, "New ticket", str(exc))
+            self.win.set_run(Run.open(path, self.win.operator))
+        except (RunError, OSError) as exc:
+            QMessageBox.warning(self, "Open run", str(exc))
 
-    def _toggle_flag(self, flag: str, value: bool):
-        try:
-            self.win.ticket.set_flag(self.win.operator, flag, value)
-        except PermissionDenied as exc:
-            QMessageBox.warning(self, "Not allowed", str(exc))
-        self.win.refresh()
-
+    # ---- display ---------------------------------------------------------------------------------
     def refresh(self):
-        t = self.win.ticket
-        while self.flag_grid.count():
-            item = self.flag_grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        if not t:
-            self.info.setText("No ticket open.")
-            self.events.setPlainText("")
-            return
-        lim = rules.tier_limits(t.tier)
-        kind = "  |  TEST TICKET (payment gate off, reports watermarked)" if t.is_test else ""
-        self.info.setText(f"{t.id}   |   {t.tier}: up to {lim['small_molecules']} small molecules and {lim['peptides']} peptides   |   "
-                          f"TAT {lim['tat']}{kind}")
-        flags = t.flags()
-        for r, (name, d) in enumerate(rules.flag_defs().items()):
-            self.flag_grid.addWidget(label(d["label"], None, False), r, 0)
-            chip = label("Yes" if flags[name] else "Not yet", "chipOk" if flags[name] else "chip", False)
-            self.flag_grid.addWidget(chip, r, 1)
-            allowed = t.is_test or rules.can_set_flag(self.win.operator, name)
-            who = ", ".join(d["who"])
-            b = button("Mark as done" if not flags[name] else "Undo", True)
-            b.setEnabled(allowed)
-            b.setToolTip(f"Set by {who}" if not allowed else "")
-            b.clicked.connect(lambda _=False, n=name, v=not flags[name]: self._toggle_flag(n, v))
-            self.flag_grid.addWidget(b, r, 2)
-            self.flag_grid.addWidget(label(f"set by {who}", "muted", False), r, 3)
-        self.flag_grid.setColumnStretch(4, 1)
+        root = self.root()
+        self.next_lbl.setText(f"The next QDOCK code in this folder will be {next_qdock_code(root)}.")
+        run = self.win.run
+        if run:
+            pkg = f"   |   Package {run.package}" if run.package else "   |   No package limit"
+            self.info.setText(f"{run.client}   |   {run.code}{pkg}   |   created {run.meta.get('created_utc', '')[:10]} by {run.meta.get('created_by', '')}\n{run.path}")
+        else:
+            self.info.setText("No run open. Create one above, or double-click a run in the table.")
+        runs = list_runs(root)
+        self._paths = [r["path"] for r in runs]
+        rows = [[r["client"], r["code"], r["created"], r["by"], r["package"] or "-", r["stage"], r["ligands"] or "-",
+                 f"{r['best']:.2f}" if r["best"] is not None else "-", r["reports"] or "-"] for r in runs]
+        colors = ["#D9E8FB" if run and r["path"].resolve() == run.path.resolve() else None for r in runs]
+        fill_table(self.runs, self.RUN_HEAD, rows, colors if any(colors) else None)
         lines = []
-        for e in t.events()[-14:][::-1]:
+        for e in (run.activity(14)[::-1] if run else []):
             data = e.get("data", {})
-            extra = f"  {data}" if data else ""
-            lines.append(f"{e['utc'][:19].replace('T', ' ')}  {e['actor']:<4} {e['type']}{extra}")
-        self.events.setPlainText("\n".join(lines))
+            lines.append(f"{e['utc'][:19].replace('T', ' ')}  {e['actor']:<4} {e['type']}" + (f"  {data}" if data else ""))
+        self.activity.setPlainText("\n".join(lines))
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -321,7 +330,7 @@ class ReceptorPage(Page):
 
     def _prepare(self):
         w = self.win
-        if not w.require_ticket():
+        if not w.require_run():
             return
         pdb = self.pdb_edit.text().strip()
         if not pdb or not Path(pdb).is_file():
@@ -420,9 +429,9 @@ class LigandsPage(Page):
 
     def _counts(self):
         s, p = self._inputs()
-        t = self.win.ticket if hasattr(self.win, "ticket") else None
-        if t:
-            lim = rules.tier_limits(t.tier)
+        t = self.win.run if hasattr(self.win, "run") else None
+        if t and t.package:
+            lim = rules.tier_limits(t.package)
             self.count_lbl.setText(f"Small molecules {len(s)}/{lim['small_molecules']}   Peptides {len(p)}/{lim['peptides']}")
         else:
             self.count_lbl.setText(f"Small molecules {len(s)}   Peptides {len(p)}")
@@ -455,7 +464,7 @@ class LigandsPage(Page):
 
     def _prepare(self):
         w = self.win
-        if not w.require_ticket():
+        if not w.require_run():
             return
         proj, small, pept, policy = w.project, self.small.toPlainText(), self.pept.toPlainText(), self._policy()
         ph = rules.docking_defaults()["ph"]
@@ -540,7 +549,7 @@ class DockingPage(Page):
 
     def _validate(self):
         w = self.win
-        if not w.require_ticket():
+        if not w.require_run():
             return
         proj, params = w.project, self.params()
 
@@ -562,7 +571,7 @@ class DockingPage(Page):
 
     def _dock(self):
         w = self.win
-        if not w.require_ticket():
+        if not w.require_run():
             return
         proj, params = w.project, self.params()
         if proj.reference_ready and not proj.validation:
@@ -634,17 +643,21 @@ class ResultsPage(Page):
         self.csv_btn = button("Export CSV…", True)
         self.log_btn = button("Save Vina log…", True)
         self.folder_btn = button("Open results folder", True)
+        self.report_type = QComboBox()
+        self.report_type.addItems(["Draft (watermarked)", "Final (no watermark)"])
         self.report_btn = button("Generate PDF report")
         self.open_report_btn = button("Open report", True)
         self.csv_btn.clicked.connect(self._export)
         self.log_btn.clicked.connect(self._save_log)
-        self.folder_btn.clicked.connect(lambda: self.win.ticket and open_path(self.win.ticket.sub("results")))
+        self.folder_btn.clicked.connect(lambda: self.win.run and open_path(self.win.run.sub("results")))
         self.report_btn.clicked.connect(self._report)
         self.open_report_btn.clicked.connect(self._open_report)
         for b in (self.csv_btn, self.log_btn, self.folder_btn):
             row.addWidget(b)
         row.addStretch(1)
         row.addWidget(self.open_report_btn)
+        row.addWidget(label("Report type", "muted", False))
+        row.addWidget(self.report_type)
         row.addWidget(self.report_btn)
         self.body.addLayout(row)
         self._last_report: Path | None = None
@@ -667,14 +680,14 @@ class ResultsPage(Page):
         if not p or not p.results:
             return
         p.export_results()
-        dest, _ = QFileDialog.getSaveFileName(self, "Export results", f"{self.win.ticket.id}_results.csv", "CSV (*.csv)")
+        dest, _ = QFileDialog.getSaveFileName(self, "Export results", f"{self.win.run.code}_results.csv", "CSV (*.csv)")
         if dest:
-            res = self.win.ticket.sub("results")
+            res = self.win.run.sub("results")
             shutil.copy2(res / "results.csv", dest)
             shutil.copy2(res / "poses.csv", Path(dest).with_name(Path(dest).stem + "_poses.csv"))
 
     def _save_log(self):
-        log = self.win.ticket.sub("results") / "vina_output.log" if self.win.ticket else None
+        log = self.win.run.sub("results") / "vina_output.log" if self.win.run else None
         if not log or not log.exists():
             QMessageBox.information(self, "Vina log", "Run docking first.")
             return
@@ -684,11 +697,11 @@ class ResultsPage(Page):
 
     def _report(self):
         w = self.win
-        if not w.require_ticket():
+        if not w.require_run():
             return
         try:
-            self._last_report = generate_report(w.project, w.operator)
-        except (PermissionDenied, ValueError, OSError) as exc:
+            self._last_report = generate_report(w.project, w.operator, final=self.report_type.currentIndex() == 1)
+        except (ValueError, OSError) as exc:
             QMessageBox.warning(self, "Report", str(exc))
             return
         w.refresh()
@@ -697,8 +710,8 @@ class ResultsPage(Page):
     def _open_report(self):
         if self._last_report and self._last_report.exists():
             open_path(self._last_report)
-        elif self.win.ticket:
-            open_path(self.win.ticket.sub("reports"))
+        elif self.win.run:
+            open_path(self.win.run.sub("reports"))
 
     # ---- display -------------------------------------------------------------------------------------
     def _show_poses(self):
@@ -740,10 +753,7 @@ class ResultsPage(Page):
                          len(r.contact_residues), len(r.polar_contacts)] for i, r in enumerate(res, 1)]
                 fill_table(self.table, self.HEAD, rows, ["#FDF1C9"] + [None] * (len(rows) - 1), 1,
                            editable_cols={1}, row_ids=[r.ligand for r in res])
-                rs = w.ticket.report_state()
-                bits = ["Integrity Seal will be applied." if rs["seal"] else "Integrity Seal withheld until QA passes and the report is signed.",
-                        "Report is watermarked." if rs["watermark"] else "Report is unwatermarked (balance cleared)."]
-                self.state_lbl.setText("  ".join(bits) + f"   Run ID {p.s.get('run_id', '')}")
+                self.state_lbl.setText(f"Run ID {p.s.get('run_id', '')}   |   {w.run.client}   {w.run.code}")
         finally:
             self._filling = False
         if has:

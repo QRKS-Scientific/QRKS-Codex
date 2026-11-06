@@ -1,7 +1,7 @@
 # QRKSDock Desktop
 
 The QRKS Scientific protein-ligand docking workflow, as a desktop app for Windows and Apple Silicon Macs.
-Runs entirely on the laptop: no server, no cloud. Client data stays in the ticket folders on Google Drive.
+Runs entirely on the laptop: no server, no cloud. Client data stays in the run folders on Google Drive.
 
 Pipeline: receptor PDB (cleaned in PyMOL) -> pdb2pqr/PROPKA protonation at pH 7.4 -> Meeko PDBQT ->
 ligands via the Scrubber and Meeko -> **AutoDock Vina 1.2.7** -> redocking validation -> results table, run manifest, branded PDF report.
@@ -23,15 +23,16 @@ The first time, **right-click the app > Open > Open**. If macOS still refuses, r
 
 ### Using it
 
-1. **Ticket**: open the ticket folder (for example `[QDOCK-261102-001]`) or create one. Pick who you are in the top-right box.
-   Finance marks *Activated & paid*; docking is blocked until then. *New test ticket* skips the gates and always watermarks the report.
+1. **Project**: choose the runs folder (ideally inside Google Drive), type the client code (for example `QC-001`), optionally pick a package, and click **Create run**.
+   The app issues the next QDOCK code (`QDOCK-260824-001`). To continue earlier work, double-click a run in the table, or use **Open run folder…**.
+   Pick who you are in the top-right box; it is recorded in the activity log and the manifest. Nothing is blocked.
 2. **Receptor**: choose the PDB you cleaned in PyMOL. Optionally add the co-crystal ligand as `.sdf` (export from PyMOL) for validation and a focused box. Click *Prepare receptor and box*.
 3. **Ligands**: paste `SMILES name` lines (and peptide sequences, 2-6 residues). *Check ligands*, then *Prepare ligands*.
-4. **Docking**: *Run validation* first (redocks the reference ligand; the top pose should be within 2.0 Å of the crystal pose), then *Run docking*.
-5. **Results**: ranked table (double-click a ligand name to rename it), the top 10 poses of the selected ligand, estimated pKd, CSV export, the raw Vina log (`vina_output.log`), and the PDF report. The report is watermarked until the balance is cleared, and carries the Integrity Seal only after QA passes and the Technical Lead signs.
+4. **Docking**: *Run validation* first (redocks the reference ligand; the top pose should be within 2.0 Å of the crystal pose), then *Run docking*. Vina chooses its own random seed and the app records it.
+5. **Results**: ranked table (double-click a ligand name to rename it), the top 10 poses of the selected ligand, estimated pKd, CSV export, the raw Vina log (`vina_output.log`), and the PDF report.
+   Choose **Draft (watermarked)** or **Final (no watermark)** before generating the report.
 
-Everything is saved inside the ticket folder (`input/`, `work/`, `results/`, `reports/`, `events/`). Status changes are saved as separate small files in `events/`,
-so several leads can work through Google Drive without overwriting each other.
+Everything is saved inside the run folder: `input/`, `work/`, `results/`, `reports/`, `logs/`. Closing the app and reopening the run picks up where you left off.
 
 ### Things to know
 
@@ -79,4 +80,4 @@ Every run writes `results/manifest.json`: software versions, all parameters, the
 Its hash is the **Run ID** printed in the report. Vina chooses its own random seed and prints it in its log; QRKSDock records that seed per ligand,
 so the same inputs, Vina version, CPU thread count and recorded seed give identical scores.
 
-Keep this repository **private**, and never commit client data or lead photos (`tickets/` is git-ignored).
+Keep this repository **private**, and never commit client data or lead photos (run folders such as `QC-*/` are git-ignored).
