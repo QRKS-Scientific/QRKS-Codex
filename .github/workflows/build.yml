@@ -1,7 +1,6 @@
-name: Build QRKSDock
-
-# Builds the Windows and Mac installers on GitHub's own machines, tests them, and
+name: Build QRKSDock # Builds the Windows and Mac installers on GitHub's own machines, tests them, and
 # (for a version tag such as v0.1.0) publishes them as a GitHub Release.
+
 on:
   push:
     tags: ["v*"]
@@ -16,9 +15,12 @@ jobs:
         include:
           - os: windows-latest
             label: windows-x64
-          - os: macos-14            # Apple Silicon (M1/M2/M3)
+            runs-on: windows-latest
+          - os: macos-14 # Apple Silicon (M1/M2/M3)
             label: macos-arm64
-    runs-on: ${{ matrix.os }}
+            runs-on: macos-14
+    runs-on: ${{ matrix.runs-on }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +89,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |
