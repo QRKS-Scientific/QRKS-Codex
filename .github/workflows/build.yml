@@ -18,7 +18,8 @@ jobs:
             label: windows-x64
           - os: macos-14            # Apple Silicon (M1/M2/M3)
             label: macos-arm64
-    runs-on: ${{ matrix.os }}
+            runs-on: macos-14
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
 
