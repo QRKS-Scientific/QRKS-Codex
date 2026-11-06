@@ -16,11 +16,9 @@ jobs:
         include:
           - os: windows-latest
             label: windows-x64
-            runs-on: windows-latest
           - os: macos-14            # Apple Silicon (M1/M2/M3)
             label: macos-arm64
-            runs-on: macos-14
-    runs-on: ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
