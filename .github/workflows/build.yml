@@ -1,7 +1,5 @@
-name: Build QRKSDock v0.3.0
+name: Build QRKSDock
 
-# Builds the Windows and Mac installers on GitHub's own machines, tests them, and
-# (for a version tag such as v0.3.0) publishes them as a GitHub Release.
 on:
   push:
     tags: ["v*"]
@@ -35,12 +33,12 @@ jobs:
       - name: Fetch AutoDock Vina (checksum-verified)
         run: python scripts/fetch_vina.py
 
-      - name: Run tests (including the imatinib/Abl redocking benchmark)
+      - name: Run test suite
         env:
           QRKS_SLOW: "1"
         run: python -m pytest -q
 
-      - name: Build the app
+      - name: Build the app via spec file
         run: pyinstaller packaging/qrksdock.spec --noconfirm
 
       - name: Self-test the built app (Windows)
