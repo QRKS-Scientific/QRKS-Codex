@@ -43,6 +43,32 @@ def button(text: str, secondary: bool = False) -> QPushButton:
     return b
 
 
+def field(title: str, widget: QWidget, guide: str = "") -> QWidget:
+    """A titled input with a short guide underneath. The guide wraps, so nothing is ever cut off."""
+    box = QWidget()
+    v = QVBoxLayout(box)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(6)
+    t = QLabel(title)
+    t.setObjectName("fieldTitle")
+    v.addWidget(t)
+    v.addWidget(widget)
+    if guide:
+        v.addWidget(label(guide, "guide"))
+    return box
+
+
+def panel(title: str) -> tuple[QFrame, QVBoxLayout]:
+    f = QFrame()
+    f.setStyleSheet(f"QFrame#panel {{ background: {P.surface}; border: 1px solid {P.border}; border-radius: 10px; }}")
+    f.setObjectName("panel")
+    v = QVBoxLayout(f)
+    v.setContentsMargins(20, 18, 20, 18)
+    v.setSpacing(10)
+    v.addWidget(label(title, "h2"))
+    return f, v
+
+
 def mono(widget) -> None:
     widget.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
 
@@ -226,28 +252,33 @@ class ProjectPage(Page):
 # ---------------------------------------------------------------------------------------------------
 class ReceptorPage(Page):
     title = "Receptor"
-    blurb = "Choose the receptor structure you cleaned in PyMOL. QRKSDock protonates it at pH 7.4 and prepares the search box."
+    blurb = "Choose the receptor you cleaned in PyMOL. QRKSDock protonates it at pH 7.4 and prepares the search box."
 
     def __init__(self, win):
         super().__init__(win)
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
-        form.setVerticalSpacing(10)
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+        left = QVBoxLayout()
+        left.setSpacing(16)
 
         self.pdb_edit = QLineEdit()
-        self.pdb_edit.setPlaceholderText("Receptor .pdb file")
+        self.pdb_edit.setPlaceholderText("Choose a receptor .pdb file")
         pb = button("Browse…", True)
         pb.clicked.connect(self._pick_pdb)
         r = QHBoxLayout()
         r.addWidget(self.pdb_edit, 1)
         r.addWidget(pb)
-        form.addRow("Receptor", r)
+        rw = QWidget()
+        rw.setLayout(r)
+        r.setContentsMargins(0, 0, 0, 0)
+        left.addWidget(field("Receptor structure", rw, "A .pdb file. Waters, ligands, ions and cofactors are removed during preparation."))
         self.inspect_lbl = label("", "muted")
-        form.addRow("", self.inspect_lbl)
+        self.inspect_lbl.hide()
+        left.addWidget(self.inspect_lbl)
 
         self.chain_edit = QLineEdit()
-        self.chain_edit.setPlaceholderText("All chains (or e.g. A or A,B)")
-        form.addRow("Chains to keep", self.chain_edit)
+        self.chain_edit.setPlaceholderText("All chains")
+        left.addWidget(field("Chains to keep", self.chain_edit, "Leave empty to keep every chain, or type one chain (A) or several (A,B)."))
 
         self.rb_auto = QRadioButton("Assign protonation at pH")
         self.rb_auto.setChecked(True)
@@ -262,52 +293,74 @@ class ReceptorPage(Page):
         pr = QHBoxLayout()
         pr.addWidget(self.rb_auto)
         pr.addWidget(self.ph_spin)
-        pr.addWidget(label("with pdb2pqr and PROPKA", "muted", False))
         pr.addStretch(1)
-        form.addRow("Protonation", pr)
-        form.addRow("", self.rb_asis)
+        pw = QWidget()
+        pw.setLayout(pr)
+        pr.setContentsMargins(0, 0, 0, 0)
+        pv = QVBoxLayout()
+        pv.setSpacing(8)
+        pv.addWidget(pw)
+        pv.addWidget(self.rb_asis)
+        pbox = QWidget()
+        pbox.setLayout(pv)
+        pv.setContentsMargins(0, 0, 0, 0)
+        left.addWidget(field("Protonation", pbox, "pdb2pqr with PROPKA assigns charges at this pH. Choose the second option only if the file already has hydrogens you trust."))
 
         self.ref_edit = QLineEdit()
-        self.ref_edit.setPlaceholderText("Optional: co-crystal ligand as .sdf, .mol or .mol2 (export from PyMOL)")
+        self.ref_edit.setPlaceholderText("Optional: the co-crystal ligand (.sdf, .mol or .mol2)")
         rb = button("Browse…", True)
         rb.clicked.connect(self._pick_ref)
         rr = QHBoxLayout()
         rr.addWidget(self.ref_edit, 1)
         rr.addWidget(rb)
-        form.addRow("Reference ligand", rr)
+        rrw = QWidget()
+        rrw.setLayout(rr)
+        rr.setContentsMargins(0, 0, 0, 0)
+        left.addWidget(field("Reference ligand", rrw, "Export it from PyMOL as .sdf (a PDB loses the bond orders). It lets you validate the setup by redocking and centre the box on it."))
 
         self.box_combo = QComboBox()
         self.box_combo.addItems(["Blind docking: whole receptor", "Around the reference ligand", "Manual box"])
         self.box_combo.currentIndexChanged.connect(self._box_mode_changed)
-        form.addRow("Search box", self.box_combo)
+        left.addWidget(field("Search box", self.box_combo, "Blind docking searches the whole protein and is slower. A box around a known ligand is faster and more accurate."))
+
         self.manual = [QDoubleSpinBox() for _ in range(6)]
-        mg = QHBoxLayout()
+        mg = QGridLayout()
+        mg.setHorizontalSpacing(10)
+        mg.setVerticalSpacing(8)
+        mg.addWidget(label("Box centre (Å)", "fieldTitle", False), 0, 0)
+        mg.addWidget(label("Box size (Å)", "fieldTitle", False), 2, 0)
         for i, sp in enumerate(self.manual):
             sp.setRange(-9999, 9999)
             sp.setDecimals(2)
+            sp.setPrefix(("X  ", "Y  ", "Z  ")[i % 3])
+            sp.setMinimumWidth(130)
             if i >= 3:
                 sp.setRange(1, 300)
                 sp.setValue(25)
-            mg.addWidget(label(("cx", "cy", "cz", "sx", "sy", "sz")[i], "muted", False))
-            mg.addWidget(sp)
+            mg.addWidget(sp, 1 if i < 3 else 3, i % 3)
         self.manual_w = QWidget()
         self.manual_w.setLayout(mg)
         mg.setContentsMargins(0, 0, 0, 0)
-        form.addRow("", self.manual_w)
-        self.allow_bad = QCheckBox("Allow removing residues that cannot be parameterized")
-        form.addRow("", self.allow_bad)
-        self.body.addLayout(form)
+        left.addWidget(self.manual_w)
 
+        self.allow_bad = QCheckBox("Allow removing residues that cannot be parameterized")
+        left.addWidget(self.allow_bad)
         self.go = button("Prepare receptor and box")
         self.go.clicked.connect(self._prepare)
-        self.body.addWidget(self.go, 0, Qt.AlignLeft)
-        self.result = label("", "summary")
-        self.result.hide()
-        self.body.addWidget(self.result)
+        left.addWidget(self.go, 0, Qt.AlignLeft)
+        left.addStretch(1)
+
+        right_panel, rv = panel("Preparation summary")
+        self.result = label("Nothing prepared yet. Choose a receptor and click Prepare receptor and box.", "muted")
+        self.result.setTextFormat(Qt.RichText)
+        rv.addWidget(self.result)
         self.notes = label("", "warn")
         self.notes.hide()
-        self.body.addWidget(self.notes)
-        self.body.addStretch(1)
+        rv.addWidget(self.notes)
+        rv.addStretch(1)
+        cols.addLayout(left, 6)
+        cols.addWidget(right_panel, 4)
+        self.body.addLayout(cols, 1)
         self._box_mode_changed()
 
     def _box_mode_changed(self):
@@ -320,8 +373,10 @@ class ReceptorPage(Page):
             try:
                 s = receptor.inspect_pdb(Path(f))
                 self.inspect_lbl.setText(s.text().replace("\n", "   |   ") + ("\n" + " ".join(s.warnings) if s.warnings else ""))
+                self.inspect_lbl.show()
             except Exception as exc:                                                    # noqa: BLE001
                 self.inspect_lbl.setText(f"Could not read this file: {exc}")
+                self.inspect_lbl.show()
 
     def _pick_ref(self):
         f, _ = QFileDialog.getOpenFileName(self, "Reference ligand", "", "Ligand files (*.sdf *.mol *.mol2);;All files (*)")
@@ -352,29 +407,45 @@ class ReceptorPage(Page):
             progress(0.05, "Preparing receptor")
             return proj.prepare_receptor(Path(pdb), log=log, **kwargs)
 
-        def done(res):
-            self.result.setText(f"{res['box'].summary()}\nRecommended exhaustiveness for this box: {res['recommended_exhaustiveness']}")
-            self.result.show()
-            warns = res["warnings"]
-            self.notes.setText("\n".join(warns))
-            self.notes.setVisible(bool(warns))
-            w.pages[3]._touched = False
+        def done(_res):
+            w.pages[3]._touched = False             # a new box means the exhaustiveness advice applies again
             w.refresh()
 
         w.run_job(job, done, "Preparing receptor…")
 
+    def _style(self, name: str) -> None:
+        self.result.setObjectName(name)
+        self.result.style().unpolish(self.result)
+        self.result.style().polish(self.result)
+
+    @staticmethod
+    def _rows(rows: list[tuple[str, str]]) -> str:
+        from html import escape
+        return "".join(f"<p style='margin:0 0 9px 0'><span style='color:{P.muted}'>{escape(k)}</span><br>"
+                       f"<b>{escape(v)}</b></p>" for k, v in rows)
+
     def refresh(self):
-        w = self.win
-        if w.project and w.project.receptor_ready:
-            box = w.project.box
-            if not self.result.isVisible():
-                self.result.setText(box.summary() + f"\nRecommended exhaustiveness for this box: {boxmod.recommended_exhaustiveness(box)}")
-                self.result.show()
-                warns = w.project.s["receptor"].get("warnings", [])
-                self.notes.setText("\n".join(warns))
-                self.notes.setVisible(bool(warns))
+        p = self.win.project
+        if p and p.receptor_ready:
+            rec = p.s["receptor"]
+            removed = ", ".join(f"{k} x{v}" for k, v in rec["removed"].items()) or "none"
+            states = ", ".join(f"{k} x{v}" for k, v in rec["residue_states"].items()) or "none assigned"
+            prot = f"pdb2pqr with PROPKA at pH {rec['ph']}" if rec["method"] == "pdb2pqr" else "supplied by you (already protonated)"
+            self._style("")
+            self.result.setText(self._rows([
+                ("Search box", p.box.summary()),
+                ("Recommended exhaustiveness for this box", str(boxmod.recommended_exhaustiveness(p.box))),
+                ("Chains kept", ", ".join(rec["chains_kept"])),
+                ("Removed from the receptor", removed),
+                ("Protonation", prot),
+                ("Histidine and other titratable states", states),
+                ("Reference ligand", "ready for validation" if p.reference_ready else "none")]))
+            warns = rec.get("warnings", [])
+            self.notes.setText("\n".join(warns))
+            self.notes.setVisible(bool(warns))
         else:
-            self.result.hide()
+            self._style("muted")
+            self.result.setText("Nothing prepared yet. Choose a receptor and click Prepare receptor and box.")
             self.notes.hide()
 
 
@@ -496,8 +567,11 @@ class DockingPage(Page):
 
     def __init__(self, win):
         super().__init__(win)
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(18)
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+        left = QVBoxLayout()
+        left.setSpacing(16)
+
         self.exh = QSpinBox()
         self.exh.setRange(1, 256)
         self.exh.setValue(16)
@@ -512,13 +586,25 @@ class DockingPage(Page):
         self.cpu.setValue(vina_runner.default_cpus())
         self._touched = False
         self.exh.valueChanged.connect(lambda _v: setattr(self, "_touched", True))
-        for i, (name, w_) in enumerate((("Exhaustiveness", self.exh), ("Poses per ligand", self.poses), ("Energy range (kcal/mol)", self.erange),
-                                        ("CPU threads", self.cpu))):
-            grid.addWidget(label(name, "muted", False), 0, i)
-            grid.addWidget(w_, 1, i)
-        self.body.addLayout(grid)
-        self.rec_lbl = label("", "muted")
-        self.body.addWidget(self.rec_lbl)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(16)
+        self.rec_lbl = label("Search depth. Higher is slower and more thorough.", "guide")
+        exh_box = QWidget()
+        ev = QVBoxLayout(exh_box)
+        ev.setContentsMargins(0, 0, 0, 0)
+        ev.setSpacing(6)
+        ev.addWidget(label("Exhaustiveness", "fieldTitle", False))
+        ev.addWidget(self.exh)
+        ev.addWidget(self.rec_lbl)
+        grid.addWidget(exh_box, 0, 0, Qt.AlignTop)
+        grid.addWidget(field("Poses per ligand", self.poses, "How many binding poses Vina keeps for each ligand. The default is the top 10."), 0, 1, Qt.AlignTop)
+        grid.addWidget(field("Energy range (kcal/mol)", self.erange, "Keep poses within this many kcal/mol of the best one. A wide range stops the top 10 being cut short."), 1, 0, Qt.AlignTop)
+        grid.addWidget(field("CPU threads", self.cpu, "Cores Vina may use. One core stays free so the window stays responsive."), 1, 1, Qt.AlignTop)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        left.addLayout(grid)
 
         row = QHBoxLayout()
         self.val_btn = button("Run validation (redock reference)", True)
@@ -528,17 +614,24 @@ class DockingPage(Page):
         self.val_btn.clicked.connect(self._validate)
         self.run_btn.clicked.connect(self._dock)
         self.cancel_btn.clicked.connect(self.win.cancel_job)
-        for b in (self.val_btn, self.run_btn, self.cancel_btn):
-            row.addWidget(b)
+        for b_ in (self.val_btn, self.run_btn, self.cancel_btn):
+            row.addWidget(b_)
         row.addStretch(1)
-        self.body.addLayout(row)
+        left.addLayout(row)
         self.val_lbl = label("", "summary")
         self.val_lbl.hide()
-        self.body.addWidget(self.val_lbl)
+        left.addWidget(self.val_lbl)
+        left.addStretch(1)
+
+        right, rv = panel("Progress and Vina output")
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         mono(self.log)
-        self.body.addWidget(self.log, 1)
+        self.log.setPlaceholderText("Messages from the run appear here. The complete Vina log is saved with the results.")
+        rv.addWidget(self.log, 1)
+        cols.addLayout(left, 5)
+        cols.addWidget(right, 5)
+        self.body.addLayout(cols, 1)
 
     def params(self) -> DockParams:
         return DockParams(exhaustiveness=self.exh.value(), num_modes=self.poses.value(), energy_range=self.erange.value(),
@@ -600,7 +693,7 @@ class DockingPage(Page):
         self.set_busy(w.busy)
         if p and p.box:
             rec = boxmod.recommended_exhaustiveness(p.box)
-            self.rec_lbl.setText(f"Recommended exhaustiveness for the current box: {rec}. Vina's default of 8 is meant for small boxes.")
+            self.rec_lbl.setText(f"Search depth. Higher is slower and more thorough. Recommended for the current box: {rec} (Vina's default of 8 suits small boxes only).")
             if not self._touched and p.receptor_ready and self.exh.value() != rec:
                 self.exh.blockSignals(True)                      # programmatic change: not "touched"
                 self.exh.setValue(rec)

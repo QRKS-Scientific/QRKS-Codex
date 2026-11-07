@@ -23,3 +23,19 @@ def vina_exe():
 
 
 slow = pytest.mark.skipif(os.environ.get("QRKS_SLOW") != "1", reason="set QRKS_SLOW=1 to run long docking tests")
+
+
+@pytest.fixture(autouse=True)
+def isolated_user_data(tmp_path, monkeypatch):
+    """Tests never touch the real settings folder, saved passwords, or Qt settings."""
+    from qrksdock import paths
+    d = tmp_path / "appdata"
+    d.mkdir()
+    monkeypatch.setattr(paths, "user_data_dir", lambda: d)
+    try:
+        from PySide6.QtCore import QSettings
+        QSettings.setDefaultFormat(QSettings.IniFormat)
+        QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(d / "qt"))
+    except ImportError:
+        pass
+    return d

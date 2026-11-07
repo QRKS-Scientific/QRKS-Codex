@@ -34,12 +34,12 @@
     },
     {
       "initials": "JER",
-      "name": "John E. Rico",
+      "name": "John E. Rico, RCh",
       "role": "Operations Lead"
     },
     {
       "initials": "LPA",
-      "name": "Lester P. Abdon",
+      "name": "Lester P. Abdon, RCh",
       "role": "Sales Lead"
     },
     {
@@ -49,12 +49,12 @@
     },
     {
       "initials": "JML",
-      "name": "Jason M. Llamera",
+      "name": "Jason M. Llamera, RCh",
       "role": "Documentations Lead"
     },
     {
       "initials": "ERD",
-      "name": "Erwin R. Desaliza",
+      "name": "Erwin R. Desaliza, RCh",
       "role": "Marketing Lead"
     }
   ],
@@ -70,7 +70,8 @@
     "box_min_size": 20.0,
     "max_states_per_ligand": 4,
     "max_stereoisomers": 8,
-    "ligand_prep_seed": 42
+    "ligand_prep_seed": 42,
+    "vina_verbosity": 2
   },
   "codes": {
     "client_example": "QC-001",

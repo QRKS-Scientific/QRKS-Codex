@@ -43,6 +43,7 @@ class DockParams:
     seed: int | None = None             # None: Vina picks its own; the seed is read back from its log
     cpu: int = 1
     ph: float = 7.4
+    verbosity: int = 2                  # Vina log detail: 2 adds the full energy breakdown of every pose
 
 
 @dataclass
@@ -256,7 +257,7 @@ class Project:
             return vina_runner.run_vina(
                 exe, self._abs(self.s["receptor"]["pdbqt"]), ligand_pdbqt, self.box, out,
                 exhaustiveness=params.exhaustiveness, num_modes=params.num_modes, energy_range=params.energy_range,
-                seed=params.seed, cpu=params.cpu, progress=progress_cb, cancel=cancel)
+                seed=params.seed, cpu=params.cpu, verbosity=params.verbosity, progress=progress_cb, cancel=cancel)
         except vina_runner.VinaCancelled as exc:
             raise Cancelled() from exc
 

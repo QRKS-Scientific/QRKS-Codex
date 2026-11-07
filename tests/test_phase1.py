@@ -122,3 +122,15 @@ def test_report_shows_pkd_new_names_and_pose_strip(project):
     text = "".join(pg.extract_text() for pg in pypdf.PdfReader(str(generate_report(project, "LEM"))).pages)
     assert "EtOH_control" in text and "Est. pKd" in text and "vina_output.log" in text and "kcal/mol" in text
     assert "random seed 42" not in text
+
+
+def test_vina_log_is_verbosity_2_with_energy_breakdown(run_dir, project):
+    log = (run_dir / "results" / "vina_output.log").read_text(encoding="utf-8")
+    n = len(project.results)
+    assert log.count("Verbosity: 2") == n                              # every ligand ran at verbosity 2
+    for term in ("Estimated Free Energy of Binding", "Final Intermolecular Energy", "Torsional Free Energy",
+                 "Unbound System's Energy", "mode |   affinity", "random seed"):
+        assert term in log
+    assert project.s["dock_params"]["verbosity"] == 2
+    man = json.loads((run_dir / "results" / "manifest.json").read_text())
+    assert man["parameters"]["verbosity"] == 2

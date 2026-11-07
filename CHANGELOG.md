@@ -9,6 +9,27 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.4.0] - 2026-11-07
+
+### Added
+- **Login screen.** The app starts on a sign-in screen showing the six lead accounts. There is no registration. Each lead signs in with a temporary password, then must choose their own at first sign-in on that laptop. Repeated wrong passwords lock the account for 30 s, then 60 s, 120 s and so on. A **Sign out** button in the header returns to the login screen.
+- Profile area in the header (photo or initials, name, role) replaces the "Signed in as" dropdown. The signed-in lead is recorded in the activity log and the manifest.
+- `scripts/make_accounts.py` creates or resets the temporary passwords. Only salted PBKDF2 hashes are stored in the app; the readable passwords go to a separate file that is never committed.
+- Optional profile photos: put `LEM.png` (and so on) in the `avatars` folder of the settings folder. Photos are never stored in the repository or installer.
+- Vina log verbosity 2: `vina_output.log` now includes the full energy breakdown of every pose (intermolecular, internal, torsional and unbound energies). The setting is recorded in the manifest.
+- Every input on the Receptor and Docking pages has a title and a wrapping guide, so no placeholder or explanation is cut off.
+- The self-test now also builds the login screen, which proves the bundled accounts file and fonts load in each installer.
+
+### Changed
+- **Typeface.** Montserrat is removed from the interface. On Mac the app uses the system font, which is SF Pro. On other systems it uses the bundled open font Inter (with Inter Display for titles). SF Pro cannot be embedded under Apple's licence. `FONT_MODE` in `brand.py` switches between the system font and Inter everywhere. Montserrat remains only inside PDF reports until the Canva template arrives.
+- Receptor and Docking pages use two columns; the right column shows the preparation summary and the run output. Inputs are taller and the window opens larger.
+- The sign-in lead is the operator for every run; roles do not restrict anything.
+
+### Notes
+- The accounts file in this release holds placeholder temporary passwords. Run `python scripts/make_accounts.py` before distributing, and rebuild.
+- A login is a gate against casual use. Client data is protected by Google Drive permissions and disk encryption.
+- Next: v0.5.0 report changes (Canva layout, peptide section rule, PyMOL images).
+
 ## [0.3.0] - 2026-11-05
 
 ### Added

@@ -107,7 +107,7 @@ def default_cpus() -> int:
 
 
 def run_vina(exe: Path, receptor: Path, ligand: Path, box: Box, out_pdbqt: Path, *,
-             exhaustiveness: int, num_modes: int, energy_range: float, seed: int | None = None, cpu: int,
+             exhaustiveness: int, num_modes: int, energy_range: float, seed: int | None = None, cpu: int, verbosity: int = 2,
              progress: ProgressCb | None = None, cancel: threading.Event | None = None) -> VinaRun:
     import time
 
@@ -115,7 +115,8 @@ def run_vina(exe: Path, receptor: Path, ligand: Path, box: Box, out_pdbqt: Path,
            "--center_x", f"{box.center[0]:.3f}", "--center_y", f"{box.center[1]:.3f}", "--center_z", f"{box.center[2]:.3f}",
            "--size_x", f"{box.size[0]:.3f}", "--size_y", f"{box.size[1]:.3f}", "--size_z", f"{box.size[2]:.3f}",
            "--exhaustiveness", str(exhaustiveness), "--num_modes", str(num_modes),
-           "--energy_range", str(energy_range), "--cpu", str(cpu), "--out", str(out_pdbqt)]
+           "--energy_range", str(energy_range), "--cpu", str(cpu), "--verbosity", str(verbosity),
+           "--out", str(out_pdbqt)]
     if seed is not None:
         cmd += ["--seed", str(seed)]
     t0 = time.time()

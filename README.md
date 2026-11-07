@@ -21,11 +21,18 @@ The first time, **right-click the app > Open > Open**. If macOS still refuses, r
 
 **First run:** choose *Help > System check*. Every line should say OK. If any says FAIL, copy the text and send it to the Technical Lead.
 
+### Signing in
+
+The app opens on a sign-in screen with the six lead accounts. Choose yours and enter the temporary password the Technical Lead gave you.
+**You must then choose your own password** (at least 10 characters); this is saved on that laptop only. After five wrong passwords the account locks for 30 seconds, and the wait doubles with each further wrong attempt.
+Use **Sign out** (top right) when you finish. If you forget your password, ask the Technical Lead for a new temporary one (`python scripts/make_accounts.py --reset JER`, then rebuild).
+To show your photo instead of initials, save a square photo as `LEM.png` (your own initials) in the `avatars` folder inside the QRKSDock settings folder; *Help > System check* lists where that is.
+
 ### Using it
 
 1. **Project**: choose the runs folder (ideally inside Google Drive), type the client code (for example `QC-001`), optionally pick a package, and click **Create run**.
    The app issues the next QDOCK code (`QDOCK-260824-001`). To continue earlier work, double-click a run in the table, or use **Open run folder…**.
-   Pick who you are in the top-right box; it is recorded in the activity log and the manifest. Nothing is blocked.
+   The lead you signed in as is recorded in the activity log and the manifest. Nothing is blocked.
 2. **Receptor**: choose the PDB you cleaned in PyMOL. Optionally add the co-crystal ligand as `.sdf` (export from PyMOL) for validation and a focused box. Click *Prepare receptor and box*.
 3. **Ligands**: paste `SMILES name` lines (and peptide sequences, 2-6 residues). *Check ligands*, then *Prepare ligands*.
 4. **Docking**: *Run validation* first (redocks the reference ligand; the top pose should be within 2.0 Å of the crystal pose), then *Run docking*. Vina chooses its own random seed and the app records it.
@@ -62,7 +69,8 @@ Layout: `src/qrksdock/core` is the engine (no GUI imports); `src/qrksdock/gui` i
 | Change this | Edit |
 | --- | --- |
 | Tier limits, roster, who may do what, docking defaults | `src/qrksdock/data/rules.json` |
-| Colours | `src/qrksdock/brand.py` (logo-sampled palette is active; the portfolio hex codes are kept beside it) |
+| Colours, typeface mode | `src/qrksdock/brand.py` (logo-sampled palette is active; `FONT_MODE` = auto, system or bundled) |
+| Lead accounts and temporary passwords | `python scripts/make_accounts.py` (see its header), then rebuild |
 | Logos / icons | drop originals in a folder and run `python scripts/make_assets.py --src <folder>` |
 | Report wording and layout | `src/qrksdock/core/report.py` |
 | Bundled Vina version | `scripts/fetch_vina.py` (update version and checksums) |

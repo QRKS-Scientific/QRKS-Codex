@@ -42,7 +42,9 @@ def system_check(vina_path: str | None = None) -> list[dict[str, Any]]:
         add("Qt (PySide6)", True, PySide6.__version__)
     except Exception as exc:                                                         # noqa: BLE001
         add("Qt (PySide6)", False, f"cannot import ({exc})")
-    add("Brand fonts", (paths.asset("fonts") / "Montserrat-Regular.ttf").exists(), "Montserrat bundled")
+    inter = (paths.asset("fonts") / "Inter-Regular.otf").exists() and (paths.asset("fonts") / "InterDisplay-Bold.otf").exists()
+    add("Interface font", inter, "SF Pro (the macOS system font) on Mac; bundled Inter on other systems")
+    add("Report font", (paths.asset("fonts") / "Montserrat-Regular.ttf").exists(), "Montserrat (replaced when the Canva template is added)")
     try:
         probe = paths.user_data_dir() / ".write_test"
         probe.write_text("ok")
@@ -97,6 +99,7 @@ def selftest(log=print) -> dict[str, Any]:
         step("Vina log and exports", lambda: _check_exports(state["run"]))
         step("PDF report (draft)", lambda: generate_report(proj, "LEM").name)
         step("Qt loads (offscreen)", lambda: _qt_probe())
+        step("login screen, accounts and fonts", lambda: _login_probe())
         ok = True
     except Exception:                                                                # noqa: BLE001
         ok = False
@@ -109,6 +112,8 @@ def _check_exports(run) -> str:
     log = (res / "vina_output.log").read_text(encoding="utf-8")
     if "mode |   affinity" not in log or "random seed" not in log:
         raise RuntimeError("vina_output.log is missing Vina's result table or seed")
+    if "Verbosity: 2" not in log or "Estimated Free Energy of Binding" not in log:
+        raise RuntimeError("vina_output.log is not at verbosity 2 (no per-pose energy breakdown)")
     for name in ("results.csv", "poses.csv", "manifest.json"):
         if not (res / name).exists():
             raise RuntimeError(f"{name} was not written")
@@ -120,3 +125,21 @@ def _qt_probe() -> str:
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv[:1])
     return f"QApplication created ({app.platformName()})"
+
+
+def _login_probe() -> str:
+    """Build the real window offscreen: proves the bundled accounts file, fonts and login screen all load."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+    from qrksdock.gui import theme
+    from qrksdock.gui.app import MainWindow
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    theme.apply(app)
+    ini = Path(tempfile.mkdtemp(prefix="qrksdock_ui_")) / "s.ini"
+    win = MainWindow(settings=QSettings(str(ini), QSettings.IniFormat))
+    tiles = list(win.login.tiles)
+    if len(tiles) != 6 or win.root_stack.currentIndex() != 0:
+        raise RuntimeError(f"login screen shows {len(tiles)} accounts (expected 6)")
+    body, _display = theme.load_fonts()
+    return f"login screen with {len(tiles)} accounts; font: {body or 'system font'}"

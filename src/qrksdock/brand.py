@@ -39,5 +39,8 @@ PORTFOLIO_PALETTE = Palette(
 )
 
 ACTIVE = LOGO_PALETTE
-FONT_FAMILY = "Montserrat"
+# UI typeface. "auto": the real SF Pro (the macOS system font) on Mac, bundled Inter (an open font that mirrors
+# SF Pro's Text and Display cuts) everywhere else. "system": every platform's own UI font. "bundled": Inter everywhere.
+# SF Pro itself may not be embedded or redistributed (Apple's licence), so it is never bundled.
+FONT_MODE = "auto"
 TAGLINE = "transform. collaborate. create."

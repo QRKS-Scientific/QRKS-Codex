@@ -26,7 +26,8 @@ def main() -> None:
              "QRKSDock bundles or depends on the open-source software below. License names are read from each package's own metadata.",
              "", "| Component | Version | License | Home page |", "| --- | --- | --- | --- |",
              "| AutoDock Vina (bundled executable) | 1.2.7 | Apache-2.0 | https://github.com/ccsb-scripps/AutoDock-Vina |",
-             "| Montserrat font (bundled) | 7.x | SIL Open Font License 1.1 | assets/fonts/LICENSE-Montserrat.txt |"]
+             "| Inter font (bundled, interface text) | 4.0 | SIL Open Font License 1.1 | assets/fonts/LICENSE-Inter.txt |",
+             "| Montserrat font (bundled, reports until the Canva template is added) | 7.x | SIL Open Font License 1.1 | assets/fonts/LICENSE-Montserrat.txt |"]
     for label, dist in PACKAGES[1:]:
         try:
             m = metadata(dist)

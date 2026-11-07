@@ -11,7 +11,7 @@ import re
 VERSION = re.search(r'__version__\s*=\s*"([^"]+)"', (ROOT / "src" / "qrksdock" / "__init__.py").read_text()).group(1)
 
 datas = [(str(ROOT / "assets"), "assets"),
-         (str(ROOT / "src" / "qrksdock" / "data" / "rules.json"), "qrksdock_data")]
+         (str(ROOT / "src" / "qrksdock" / "data"), "qrksdock_data")]      # rules.json AND accounts.json
 vina = [p for p in (ROOT / "bin").glob("vina*") if p.is_file()]
 if not vina:
     raise SystemExit("bin/vina is missing. Run: python scripts/fetch_vina.py")

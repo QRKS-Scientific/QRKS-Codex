@@ -6,15 +6,18 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QGuiApplication, QIcon, QPixmap
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QScrollArea,
+from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QScrollArea,
                                QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 from qrksdock import __version__, brand, paths
 from qrksdock.core import diagnostics, rules
+from qrksdock.core.accounts import AccountStore
 from qrksdock.core.pipeline import Project
 from qrksdock.core.runs import Run
 from qrksdock.gui import theme
+from qrksdock.gui.avatars import avatar_pixmap
+from qrksdock.gui.login import LoginPage
 from qrksdock.gui.pages import DockingPage, LigandsPage, ReceptorPage, ProjectPage, ResultsPage, button, label, mono
 from qrksdock.gui.workers import Worker
 
@@ -22,25 +25,27 @@ NAMES = ["Project", "Receptor", "Ligands", "Docking", "Results"]
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, store: AccountStore | None = None, settings: QSettings | None = None) -> None:
         super().__init__()
-        self.settings = QSettings("QRKS Scientific", "QRKSDock")
+        self.settings = settings or QSettings("QRKS Scientific", "QRKSDock")
         self.run: Run | None = None
         self.project: Project | None = None
         self.busy = False
         self.worker: Worker | None = None
-        saved_op = str(self.settings.value("operator", "LEM"))
-        self.operator = saved_op if saved_op in [p["initials"] for p in rules.roster()] else rules.roster()[0]["initials"]
+        self.store = store or AccountStore()
+        self.user: dict | None = None
+        self.operator = ""                           # initials of the signed-in lead, recorded in logs and manifests
         self.vina_path: str | None = (str(self.settings.value("vina_path", "")) or None)
 
         self.setWindowTitle(f"QRKSDock {__version__}  |  QRKS Scientific")
         self.setWindowIcon(QIcon(str(paths.asset("icons", "qrksdock_256.png"))))
         avail = QGuiApplication.primaryScreen().availableGeometry()          # fit the laptop's screen
         self.resize(int(min(1360, avail.width() * 0.94)), int(min(900, avail.height() * 0.94)))
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(1000, 640)
 
-        root = QWidget()
-        root.setObjectName("canvas")
+        self.workspace = QWidget()
+        self.workspace.setObjectName("canvas")
+        root = self.workspace
         v = QVBoxLayout(root)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
@@ -70,7 +75,12 @@ class MainWindow(QMainWindow):
         body.addWidget(self.rail)
         body.addWidget(self.stack, 1)
         v.addLayout(body, 1)
-        self.setCentralWidget(root)
+        self.login = LoginPage(self.store, str(self.settings.value("last_user", "")))
+        self.login.signedIn.connect(self.sign_in)
+        self.root_stack = QStackedWidget()
+        self.root_stack.addWidget(self.login)          # 0: sign in
+        self.root_stack.addWidget(self.workspace)      # 1: the application
+        self.setCentralWidget(self.root_stack)
 
         self.status_lbl = QLabel("Create or open a run to begin.")
         self.progress = QProgressBar()
@@ -80,6 +90,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self.status_lbl, 1)
         self.statusBar().addPermanentWidget(self.progress)
         self._build_menu()
+        self._set_signed_in(False)
         self.rail.setCurrentRow(0)
         self.refresh()
 
@@ -97,13 +108,23 @@ class MainWindow(QMainWindow):
         self.run_chip = label("No run open", "chip", False)
         lay.addWidget(self.run_chip)
         lay.addSpacing(14)
-        lay.addWidget(label("Signed in as", "muted", False))
-        self.op_combo = QComboBox()
-        for p in rules.roster():
-            self.op_combo.addItem(f"{p['initials']}  {p['role']}", p["initials"])
-        self.op_combo.setCurrentIndex(max(0, self.op_combo.findData(self.operator)))
-        self.op_combo.currentIndexChanged.connect(self._operator_changed)
-        lay.addWidget(self.op_combo)
+        lay.addSpacing(18)
+        self.avatar_lbl = QLabel()
+        self.avatar_lbl.setFixedSize(40, 40)
+        lay.addWidget(self.avatar_lbl)
+        who = QVBoxLayout()
+        who.setSpacing(0)
+        self.user_name = QLabel("")
+        self.user_name.setObjectName("userName")
+        self.user_role = label("", "muted", False)
+        who.addWidget(self.user_name)
+        who.addWidget(self.user_role)
+        lay.addLayout(who)
+        self.signout_btn = QPushButton("Sign out")
+        self.signout_btn.setObjectName("ghost")
+        self.signout_btn.setCursor(Qt.PointingHandCursor)
+        self.signout_btn.clicked.connect(self.sign_out)
+        lay.addWidget(self.signout_btn)
         return h
 
     def _build_menu(self) -> None:
@@ -111,13 +132,17 @@ class MainWindow(QMainWindow):
         f = mb.addMenu("&File")
         a_open = QAction("Open run folder…", self)
         a_open.triggered.connect(self.pages[0]._open)
+        a_out = QAction("Sign out", self)
+        a_out.triggered.connect(self.sign_out)
         a_quit = QAction("Quit", self)
         a_quit.triggered.connect(self.close)
-        f.addActions([a_open, a_quit])
+        f.addActions([a_open, a_out, a_quit])
+        self._gated = [a_open, a_out]
         t = mb.addMenu("&Tools")
         a_vina = QAction("Choose Vina location…", self)
         a_vina.triggered.connect(self.choose_vina)
         t.addAction(a_vina)
+        self._gated.append(a_vina)
         hp = mb.addMenu("&Help")
         a_chk = QAction("System check…", self)
         a_chk.triggered.connect(self.show_system_check)
@@ -139,11 +164,36 @@ class MainWindow(QMainWindow):
                 p._touched = False
         self.refresh()
 
-    def _operator_changed(self) -> None:
-        self.operator = self.op_combo.currentData()
-        self.settings.setValue("operator", self.operator)
+    def _set_signed_in(self, on: bool) -> None:
+        for act in self._gated:
+            act.setEnabled(on)
+
+    def sign_in(self, initials: str) -> None:
+        person = next((p for p in rules.roster() if p["initials"] == initials), None)
+        if person is None:
+            return
+        self.user, self.operator = person, initials
+        self.settings.setValue("last_user", initials)
+        self.avatar_lbl.setPixmap(avatar_pixmap(initials, 40))
+        self.user_name.setText(person["name"])
+        self.user_role.setText(person["role"])
         if self.project:
-            self.project.actor = self.operator
+            self.project.actor = initials
+        self._set_signed_in(True)
+        self.root_stack.setCurrentIndex(1)
+        self.status_lbl.setText(f"Signed in as {person['name']} ({person['role']}). Create or open a run to begin.")
+        self.refresh()
+
+    def sign_out(self) -> None:
+        if self.busy:
+            QMessageBox.information(self, "Please wait", "A job is still running. Wait for it to finish or cancel it first.")
+            return
+        self.user, self.operator = None, ""
+        self.run, self.project = None, None
+        self._set_signed_in(False)
+        self.login.reset()
+        self.root_stack.setCurrentIndex(0)
+        self.rail.setCurrentRow(0)
         self.refresh()
 
     def require_run(self) -> bool:
@@ -257,9 +307,7 @@ def run_gui() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("QRKSDock")
     app.setOrganizationName("QRKS Scientific")
-    family = theme.load_fonts()
-    app.setFont(theme.base_font(family))
-    app.setStyleSheet(theme.stylesheet(family))
+    theme.apply(app)
     win = MainWindow()
     win.show()
     return app.exec()
