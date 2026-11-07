@@ -137,7 +137,7 @@ def test_full_sign_in_with_forced_password_change_and_sign_out(tmp_path, monkeyp
     win.login.password.setText("TEMP-JER-0001")
     win.login._submit()
     assert win.root_stack.currentIndex() == 1 and win.operator == "JER"
-    assert win.user_name.text() == "John E. Rico" and win.user_role.text() == "Operations Lead"
+    assert win.user_name.text() == "John E. Rico, RCh" and win.user_role.text() == "Operations Lead"
     assert win.store.authenticate("JER", "river-Stone-84-lamp").ok
     win.sign_out()
     assert win.root_stack.currentIndex() == 0 and win.operator == "" and win.run is None
