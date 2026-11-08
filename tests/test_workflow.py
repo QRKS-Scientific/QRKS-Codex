@@ -66,6 +66,7 @@ def test_draft_and_final_reports(finished):
     assert "Draft (watermarked)" in td and "Final" in tf and "Draft (watermarked)" not in tf
     for t in (td, tf):
         assert "QC-001" in t and p.run.code in t
+        assert "Lars E. Medice, RCh." in t                                    # the report names the lead with the credential
         assert "Integrity Seal" not in t and "Sign-off" not in t and "Ticket" not in t
 
 

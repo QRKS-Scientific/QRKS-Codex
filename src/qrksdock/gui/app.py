@@ -175,13 +175,13 @@ class MainWindow(QMainWindow):
         self.user, self.operator = person, initials
         self.settings.setValue("last_user", initials)
         self.avatar_lbl.setPixmap(avatar_pixmap(initials, 40))
-        self.user_name.setText(person["name"])
+        self.user_name.setText(person["display_name"])
         self.user_role.setText(person["role"])
         if self.project:
             self.project.actor = initials
         self._set_signed_in(True)
         self.root_stack.setCurrentIndex(1)
-        self.status_lbl.setText(f"Signed in as {person['name']} ({person['role']}). Create or open a run to begin.")
+        self.status_lbl.setText(f"Signed in as {person['display_name']} ({person['role']}). Create or open a run to begin.")
         self.refresh()
 
     def sign_out(self) -> None:

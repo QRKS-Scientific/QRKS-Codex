@@ -147,7 +147,7 @@ class LoginPage(QWidget):
             tile.setIcon(QIcon(avatar_pixmap(a["initials"], 96)))
             tile.setIconSize(QSize(64, 64))
             tile.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-            tile.setText(f"{a['name']}\n{a['role']}")
+            tile.setText(f"{a['display_name']}\n{a['role']}")
             tile.setMinimumSize(196, 150)
             tile.clicked.connect(lambda _=False, ini=a["initials"]: self._select(ini))
             self.group.addButton(tile)
@@ -195,7 +195,7 @@ class LoginPage(QWidget):
         self.selected = initials
         self.tiles[initials].setChecked(True)
         person = next(a for a in self.store.accounts() if a["initials"] == initials)
-        self.who.setText(f"Password for {person['name']}")
+        self.who.setText(f"Password for {person['display_name']}")
         self.go.setEnabled(self._locked_for == 0)
         self.msg.hide()
         self.password.clear()

@@ -48,7 +48,7 @@ def main() -> int:
     for ini in who:
         pw = temp_password()
         current["accounts"][ini] = accounts.hash_password(pw)
-        lines.append(f"{ini:<4} {roster[ini]['name']:<26} {roster[ini]['role']:<22} {pw}")
+        lines.append(f"{ini:<4} {roster[ini]['display_name']:<26} {roster[ini]['role']:<22} {pw}")
     current["version"] = 1
     current["kdf"] = "pbkdf2_sha256"
     target.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")

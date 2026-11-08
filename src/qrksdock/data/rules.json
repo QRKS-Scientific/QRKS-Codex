@@ -29,33 +29,39 @@
   "roster": [
     {
       "initials": "LEM",
-      "name": "Lars E. Medice, RCh",
-      "role": "Technical Lead"
+      "name": "Lars E. Medice",
+      "role": "Technical Lead",
+      "credential": "RCh."
     },
     {
       "initials": "JER",
-      "name": "John E. Rico, RCh",
-      "role": "Operations Lead"
+      "name": "John E. Rico",
+      "role": "Operations Lead",
+      "credential": "RCh."
     },
     {
       "initials": "LPA",
-      "name": "Lester P. Abdon, RCh",
-      "role": "Sales Lead"
+      "name": "Lester P. Abdon",
+      "role": "Sales Lead",
+      "credential": "RCh."
     },
     {
       "initials": "JCG",
-      "name": "Josiah C. Guillermo, RCh",
-      "role": "Finance Lead"
+      "name": "Josiah C. Guillermo",
+      "role": "Finance Lead",
+      "credential": "RCh."
     },
     {
       "initials": "JML",
-      "name": "Jason M. Llamera, RCh",
-      "role": "Documentations Lead"
+      "name": "Jason M. Llamera",
+      "role": "Documentations Lead",
+      "credential": "RCh."
     },
     {
       "initials": "ERD",
-      "name": "Erwin R. Desaliza, RCh",
-      "role": "Marketing Lead"
+      "name": "Erwin R. Desaliza",
+      "role": "Marketing Lead",
+      "credential": "RCh."
     }
   ],
   "docking": {

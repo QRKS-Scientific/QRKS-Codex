@@ -9,6 +9,16 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.4.1] - 2026-11-07
+
+### Changed
+- All six leads are Registered Chemists and now show **RCh.** everywhere a name appears: login tiles, the header, the status line, the password prompt and the report's "Prepared by". The title is stored as data (`credential` in `rules.json`) and one function (`rules.display_name`) builds every display name, so it cannot drift between screens.
+- Build workflow runs on `windows-latest` and `macos-latest` (Apple Silicon). GitHub retired the macOS 14 runner images on 2 November 2026, so the old label would have stopped working. Packaging still uses `packaging/qrksdock.spec`.
+
+### Added
+- `docs/adr/0001-central-auth-and-sync-server.md`: the design for a private sign-in and sync server with all computation kept on each laptop (proposed, not yet built).
+- Tests that lock in the RCh. display and the workflow's runner labels and spec path, so a later build cannot undo them.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added

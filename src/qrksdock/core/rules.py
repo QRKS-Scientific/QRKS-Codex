@@ -21,8 +21,27 @@ def tier_limits(tier: str) -> dict[str, Any]:
     return load()["tiers"][tier]
 
 
+def display_name(person: dict[str, str]) -> str:
+    """The one place a lead's name is assembled for display: 'Lars E. Medice, RCh.' (credential only if they hold one)."""
+    return f"{person['name']}, {person['credential']}" if person.get("credential") else person["name"]
+
+
 def roster() -> list[dict[str, str]]:
-    return load()["roster"]
+    """Every lead, each with a ready-made `display_name`. Use that field in every screen, log and report."""
+    out = []
+    for person in load()["roster"]:
+        entry = dict(person)
+        entry["display_name"] = display_name(person)
+        out.append(entry)
+    return out
+
+
+def display_name_of(initials: str) -> str:
+    """Display name for initials; falls back to the initials themselves if the lead is not on the roster."""
+    for person in roster():
+        if person["initials"] == initials:
+            return person["display_name"]
+    return initials
 
 
 def role_of(initials: str) -> str:

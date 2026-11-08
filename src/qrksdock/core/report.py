@@ -148,7 +148,7 @@ def generate_report(project: Project, actor: str, final: bool = False, out_path:
               Paragraph("Protein-ligand docking with AutoDock Vina", S["sub"]), Spacer(1, 8)]
     meta = [
         [_p("QDOCK code", S["cellb"]), _p(t.code, S["cell"]), _p("Client code", S["cellb"]), _p(t.client, S["cell"])],
-        [_p("Prepared by", S["cellb"]), _p(f"{actor} ({rules.role_of(actor)})", S["cell"]),
+        [_p("Prepared by", S["cellb"]), _p(f"{rules.display_name_of(actor)} ({rules.role_of(actor)})", S["cell"]),
          _p("Report date", S["cellb"]), _p(datetime.now(timezone.utc).strftime("%d %B %Y"), S["cell"])],
         [_p("Run ID", S["cellb"]), _p(s.get("run_id", "n/a"), S["cell"]), _p("Status", S["cellb"]), _p("Final" if final else "Draft (watermarked)", S["cell"])],
     ]
