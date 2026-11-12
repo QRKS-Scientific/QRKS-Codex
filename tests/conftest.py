@@ -39,3 +39,11 @@ def isolated_user_data(tmp_path, monkeypatch):
     except ImportError:
         pass
     return d
+
+
+@pytest.fixture(autouse=True)
+def no_leftover_event_sink():
+    """The run-event hook is global; make sure no test leaves it behind for the next one."""
+    yield
+    from qrksdock.core.runs import Run
+    Run.event_sink = None

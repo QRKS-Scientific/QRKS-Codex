@@ -185,6 +185,8 @@ class LoginPage(QWidget):
         v.addSpacing(6)
         v.addWidget(label("Accounts are issued by the Technical Lead. There is no sign-up. "
                           "If you forget your password, ask the Technical Lead for a new temporary one.", "guide"))
+        if hasattr(self.store, "describe"):
+            v.addWidget(label(self.store.describe(), "guide"))
         v.addStretch(2)
         h.addWidget(col, 1)
         h.addStretch(1)

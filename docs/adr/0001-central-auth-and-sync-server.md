@@ -1,7 +1,14 @@
 # ADR 0001: Central sign-in and sync server, local compute
 
-Status: **Proposed** (design agreed in principle; not built). Target: v0.6.0 and v0.7.0.
-Decided by: QRKS Scientific technical lead. Date: 2026-11-07.
+Status: **Accepted and built in v0.5.0** (steps 1-4 of the build plan). Sheets dashboard worker is still to come.
+Decided by: QRKS Scientific technical lead. Date: 2026-11-07, decisions confirmed 2026-11-08.
+
+## Decisions confirmed
+- Build the server and remote sign-in **before** the report/Canva phase.
+- **Offline grace: 7 days** from the last time the server confirmed the session.
+- **Public HTTPS with rate limiting** on a free or low-cost host (no VPN). See `server/README.md` for what free really means.
+- Run summaries are **derived from events** on the server, so there is no separate summary endpoint (fewer endpoints, no chemistry fields).
+- All six leads are Registered Chemists; display names carry `RCh.` (see `rules.display_name`).
 
 ## Problem
 v0.4.0 keeps accounts in a file inside each installation. Because every laptop is independent:
@@ -59,9 +66,9 @@ POST /v1/auth/refresh         {refresh_token} -> new tokens (rotation)
 POST /v1/auth/logout          revoke this session
 POST /v1/auth/change-password {current, new}
 GET  /v1/me                   initials, display_name, role
-POST /v1/runs                 {client_code} -> allocates QDOCK-YYMMDD-NNN
-GET  /v1/runs?client=QC-001
-PUT  /v1/runs/{code}/summary  stage, counts, run_id, report flags (no chemistry)
+POST /v1/runs                 {client_code[, code, request_id]} -> allocates QDOCK-YYMMDD-NNN (Manila date), or registers an existing code
+GET  /v1/runs?client=QC-001   dashboard rows derived from events (stage, ligand count, reports)
+GET  /v1/runs/{code}/events
 POST /v1/runs/{code}/events   batch of activity events, idempotent by event id
 GET  /v1/meta                 {api: 1, min_app: "0.6.0"}   (app warns if too old)
 GET  /healthz
@@ -109,3 +116,15 @@ Settings come from environment variables (`pydantic-settings`); secrets are neve
 4. Run registry and events (server-issued QDOCK codes, idempotent event upload).
 5. Sheets dashboard worker on the server.
 6. Runbook, restore drill, and a short security review before real client data is involved.
+
+## Implementation status
+| Step | Status |
+| --- | --- |
+| 1. `AuthProvider` seam (`AccountStore` and `RemoteAuthProvider`) | done, v0.5.0 |
+| 2. Server with tests (37) | done |
+| 3. Client network layer: keychain session, outbox, 7-day offline grace (+ 29 tests) | done |
+| 4. Run registry and idempotent events, server-issued codes | done |
+| 5. Google Sheets dashboard worker on the server | not started |
+| 6. Runbook, restore drill, security review | runbook written (`server/README.md`); the drill and review are yours to do before real client data |
+
+Not verified yet: the Windows Credential Manager and macOS Keychain paths (the installers' self-test checks them in CI), and any real internet deployment.

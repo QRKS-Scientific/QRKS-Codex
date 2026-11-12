@@ -6,7 +6,7 @@ from pathlib import Path
 
 PACKAGES = [("AutoDock Vina (bundled executable)", None), ("PySide6-Essentials", "PySide6-Essentials"), ("rdkit", "rdkit"),
             ("meeko", "meeko"), ("molscrub", "molscrub"), ("pdb2pqr", "pdb2pqr"), ("propka", "propka"),
-            ("reportlab", "reportlab"), ("numpy", "numpy"), ("pillow", "pillow")]
+            ("reportlab", "reportlab"), ("numpy", "numpy"), ("pillow", "pillow"), ("httpx", "httpx"), ("keyring", "keyring")]
 OUT = Path(__file__).resolve().parents[1] / "THIRD_PARTY_NOTICES.md"
 
 

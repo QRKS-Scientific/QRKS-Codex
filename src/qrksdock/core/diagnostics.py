@@ -46,6 +46,15 @@ def system_check(vina_path: str | None = None) -> list[dict[str, Any]]:
     add("Interface font", inter, "SF Pro (the macOS system font) on Mac; bundled Inter on other systems")
     add("Report font", (paths.asset("fonts") / "Montserrat-Regular.ttf").exists(), "Montserrat (replaced when the Canva template is added)")
     try:
+        from qrksdock.net.config import server_url
+        from qrksdock.net.store import default_store
+        st = default_store()
+        add("Secure storage", st.persistent or sys.platform not in ("win32", "darwin"),
+            f"{type(st).__name__} ({'OS keychain' if st.persistent else 'memory only: sign-in will not persist'})")
+        add("QRKS server", True, server_url() or "not configured: local accounts (development mode)")
+    except Exception as exc:                                                             # noqa: BLE001
+        add("Secure storage", False, f"cannot check ({exc})")
+    try:
         probe = paths.user_data_dir() / ".write_test"
         probe.write_text("ok")
         probe.unlink()
@@ -100,6 +109,7 @@ def selftest(log=print) -> dict[str, Any]:
         step("PDF report (draft)", lambda: generate_report(proj, "LEM").name)
         step("Qt loads (offscreen)", lambda: _qt_probe())
         step("login screen, accounts and fonts", lambda: _login_probe())
+        step("secure storage and TLS certificates", lambda: _net_probe())
         ok = True
     except Exception:                                                                # noqa: BLE001
         ok = False
@@ -143,3 +153,19 @@ def _login_probe() -> str:
         raise RuntimeError(f"login screen shows {len(tiles)} accounts (expected 6)")
     body, _display = theme.load_fonts()
     return f"login screen with {len(tiles)} accounts; font: {body or 'system font'}"
+
+
+def _net_probe() -> str:
+    """Windows and macOS builds must have a real OS keychain; every build must carry the TLS certificate bundle."""
+    import certifi
+    from qrksdock.net.store import default_store
+    store = default_store()
+    store.set("selftest", "ok")
+    if store.get("selftest") != "ok":
+        raise RuntimeError("the secure store could not read back what it saved")
+    store.delete("selftest")
+    if sys.platform in ("win32", "darwin") and not store.persistent:
+        raise RuntimeError("no operating-system keychain was found, so saved sign-ins would not survive a restart")
+    if not os.path.exists(certifi.where()):
+        raise RuntimeError("the TLS certificate bundle is missing, so the app could not verify the server")
+    return f"{type(store).__name__} ({'persistent' if store.persistent else 'memory only'}); TLS certificates found"

@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QScrollArea,
                                QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
@@ -15,6 +15,9 @@ from qrksdock.core import diagnostics, rules
 from qrksdock.core.accounts import AccountStore
 from qrksdock.core.pipeline import Project
 from qrksdock.core.runs import Run
+from qrksdock.net.provider import RemoteAuthProvider
+from qrksdock.net.services import NetServices
+from qrksdock.net.sync import SyncResult
 from qrksdock.gui import theme
 from qrksdock.gui.avatars import avatar_pixmap
 from qrksdock.gui.login import LoginPage
@@ -25,14 +28,20 @@ NAMES = ["Project", "Receptor", "Ligands", "Docking", "Results"]
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, store: AccountStore | None = None, settings: QSettings | None = None) -> None:
+    def __init__(self, store=None, settings: QSettings | None = None, services: NetServices | None = None) -> None:
         super().__init__()
         self.settings = settings or QSettings("QRKS Scientific", "QRKSDock")
         self.run: Run | None = None
         self.project: Project | None = None
         self.busy = False
         self.worker: Worker | None = None
-        self.store = store or AccountStore()
+        # With a server configured, sign-in, run codes and activity go through it. Otherwise: local accounts (development).
+        self.net: NetServices | None = services if services is not None else (None if store is not None else NetServices.create())
+        self.store = store or (RemoteAuthProvider(self.net.session) if self.net else AccountStore())
+        self._syncing = False
+        self.sync_timer = QTimer(self)
+        self.sync_timer.setInterval(30_000)
+        self.sync_timer.timeout.connect(self._sync_now)
         self.user: dict | None = None
         self.operator = ""                           # initials of the signed-in lead, recorded in logs and manifests
         self.vina_path: str | None = (str(self.settings.value("vina_path", "")) or None)
@@ -93,6 +102,8 @@ class MainWindow(QMainWindow):
         self._set_signed_in(False)
         self.rail.setCurrentRow(0)
         self.refresh()
+        if self.net:
+            QTimer.singleShot(0, self._try_resume)           # let the sign-in screen draw first
 
     # ---- layout pieces -------------------------------------------------------------------------
     def _build_header(self) -> QWidget:
@@ -108,6 +119,9 @@ class MainWindow(QMainWindow):
         self.run_chip = label("No run open", "chip", False)
         lay.addWidget(self.run_chip)
         lay.addSpacing(14)
+        self.sync_chip = label("", "chip", False)
+        self.sync_chip.hide()
+        lay.addWidget(self.sync_chip)
         lay.addSpacing(18)
         self.avatar_lbl = QLabel()
         self.avatar_lbl.setFixedSize(40, 40)
@@ -180,6 +194,12 @@ class MainWindow(QMainWindow):
         if self.project:
             self.project.actor = initials
         self._set_signed_in(True)
+        if self.net:
+            Run.event_sink = self._on_run_event
+            self.sync_timer.start()
+            self.sync_chip.show()
+            self._set_chip(SyncResult(pending=self.net.outbox.count(), online=not self.net.session.offline))
+            QTimer.singleShot(0, self._sync_now)
         self.root_stack.setCurrentIndex(1)
         self.status_lbl.setText(f"Signed in as {person['display_name']} ({person['role']}). Create or open a run to begin.")
         self.refresh()
@@ -190,11 +210,74 @@ class MainWindow(QMainWindow):
             return
         self.user, self.operator = None, ""
         self.run, self.project = None, None
+        Run.event_sink = None
+        self.sync_timer.stop()
+        self.sync_chip.hide()
+        self.store.sign_out()
         self._set_signed_in(False)
         self.login.reset()
         self.root_stack.setCurrentIndex(0)
         self.rail.setCurrentRow(0)
         self.refresh()
+
+    # ---- server: saved session, event sync, status chip ------------------------------------------------------------------------
+    def _try_resume(self) -> None:
+        """Silent sign-in from the saved session (with the 7-day offline grace), without freezing the window."""
+        self.status_lbl.setText("Checking your saved sign-in…")
+        self._resume_worker = Worker(lambda log, progress, cancel: self.store.resume())
+        self._resume_worker.done.connect(self._resume_done)
+        self._resume_worker.failed.connect(lambda _m: self.status_lbl.setText("Sign in to begin."))
+        self._resume_worker.start()
+
+    def _resume_done(self, initials) -> None:
+        if initials:
+            self.sign_in(initials)
+        else:
+            self.status_lbl.setText("Sign in to begin.")
+
+    def _on_run_event(self, run: Run, entry: dict) -> None:
+        if self.net:
+            self.net.outbox.enqueue(run.code, run.client, entry["type"], entry.get("data", {}), entry["utc"])
+
+    def _sync_now(self) -> None:
+        if not self.net or not self.user or self._syncing:
+            return
+        self._syncing = True
+        self._sync_worker = Worker(lambda log, progress, cancel: self.net.sync.flush())
+        self._sync_worker.done.connect(self._sync_done)
+        self._sync_worker.failed.connect(lambda _m: setattr(self, "_syncing", False))
+        self._sync_worker.start()
+
+    def _sync_done(self, result: SyncResult) -> None:
+        self._syncing = False
+        if self.net and self.net.session.session_lost and self.user:
+            QMessageBox.information(self, "Signed out", "The server ended your session. Sign in again.")
+            self.net.session.session_lost = False
+            self.sign_out()
+            return
+        self._set_chip(result)
+        if self.net and result.online:
+            waiting = self.net.outbox.count()
+            # Events that arrived while that sync was running (more waiting than it saw), or progress with more to send:
+            # go again now instead of waiting for the 30-second timer. No progress and nothing new means stop (no spinning).
+            if waiting > result.pending or (result.sent > 0 and waiting > 0):
+                QTimer.singleShot(200, self._sync_now)
+
+    def _set_chip(self, r: SyncResult) -> None:
+        if r.online:
+            self.sync_chip.setText("Online" + (f"  |  {r.pending} waiting" if r.pending else ""))
+            name = "chipOk"
+        else:
+            self.sync_chip.setText(f"Offline  |  {r.pending} waiting")
+            name = "chip"
+        self.sync_chip.setObjectName(name)
+        self.sync_chip.style().unpolish(self.sync_chip)
+        self.sync_chip.style().polish(self.sync_chip)
+
+    def closeEvent(self, event) -> None:
+        Run.event_sink = None
+        self.sync_timer.stop()
+        super().closeEvent(event)
 
     def require_run(self) -> bool:
         if self.busy:
@@ -235,6 +318,7 @@ class MainWindow(QMainWindow):
             self.busy = False
             self.progress.hide()
             self.refresh()
+            self._sync_now()
 
         def ok(res):
             try:

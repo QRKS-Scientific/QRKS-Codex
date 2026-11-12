@@ -149,6 +149,16 @@ class AccountStore:
         left = MAX_FREE_ATTEMPTS - fails
         return AuthResult(False, message=f"Wrong password. {left} attempt{'s' if left != 1 else ''} left before a short lock.", attempts_left=left)
 
+    # ---- the AuthProvider interface (shared with RemoteAuthProvider) ----------------------------------------------
+    def resume(self) -> str | None:
+        return None                                            # local accounts have no saved session
+
+    def sign_out(self) -> None:
+        return None
+
+    def describe(self) -> str:
+        return "Local accounts (development mode)"
+
     # ---- password change ---------------------------------------------------------------------------------------------
     def change_password(self, initials: str, current_password: str, new_password: str) -> None:
         problem = password_problem(new_password, current_password, initials)

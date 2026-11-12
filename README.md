@@ -23,6 +23,9 @@ The first time, **right-click the app > Open > Open**. If macOS still refuses, r
 
 ### Signing in
 
+> **Server mode.** When the installer is built with a server address, your account lives on the QRKS server. Your temporary password works once: choose your own at first sign-in. The app remembers your sign-in on that laptop, so it opens straight into your account, and it keeps working with no internet for **7 days** after the server last confirmed it. The header shows **Online** or **Offline** with the number of events waiting to upload. After you **Sign out**, signing in again needs a connection. Creating a new run needs a connection too (the server issues the QDOCK code); existing runs work offline.
+> Local accounts (below) are used only in development builds with no server address.
+
 The app opens on a sign-in screen with the six lead accounts. Choose yours and enter the temporary password the Technical Lead gave you.
 **You must then choose your own password** (at least 10 characters); this is saved on that laptop only. After five wrong passwords the account locks for 30 seconds, and the wait doubles with each further wrong attempt.
 Use **Sign out** (top right) when you finish. If you forget your password, ask the Technical Lead for a new temporary one (`python scripts/make_accounts.py --reset JER`, then rebuild).
@@ -74,6 +77,11 @@ Layout: `src/qrksdock/core` is the engine (no GUI imports); `src/qrksdock/gui` i
 | Logos / icons | drop originals in a folder and run `python scripts/make_assets.py --src <folder>` |
 | Report wording and layout | `src/qrksdock/core/report.py` |
 | Bundled Vina version | `scripts/fetch_vina.py` (update version and checksums) |
+
+### Connecting to the server
+
+The server lives in `server/` (see `server/README.md` to deploy it). To make installers use it, set `"url"` in `src/qrksdock/data/server.json` (for example `"https://qrks-example.duckdns.org"`) before tagging a release, or set the `QRKS_SERVER_URL` environment variable when running from source. The address must be `https://` (plain `http://` is allowed only for `localhost`).
+Server tests: `cd server && pip install -r requirements-dev.txt && python -m pytest -q`. The desktop tests that talk to the real server run automatically when the server's packages are installed and skip otherwise.
 
 ### Releasing
 

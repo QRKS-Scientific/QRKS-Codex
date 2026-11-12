@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, ClassVar
 
 from qrksdock import __version__
 from qrksdock.core import rules
@@ -82,6 +82,8 @@ def next_qdock_code(root: Path, today: datetime | None = None) -> str:
 class Run:
     path: Path
     meta: dict[str, Any] = field(default_factory=dict)
+    # Set by the app when a server is configured. Called with (run, event) after the event is written locally.
+    event_sink: ClassVar[Callable[["Run", dict[str, Any]], None] | None] = None
 
     # ---- create / open ---------------------------------------------------------------
     @classmethod
@@ -151,6 +153,11 @@ class Run:
                  "data": data or {}, "app_version": __version__}
         with open(self.sub("logs") / "activity.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
+        if Run.event_sink is not None:
+            try:
+                Run.event_sink(self, entry)
+            except Exception:                                  # noqa: BLE001  (a sync problem must never stop a docking job)
+                pass
 
     def activity(self, limit: int = 30) -> list[dict[str, Any]]:
         f = self.sub("logs") / "activity.jsonl"

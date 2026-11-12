@@ -19,10 +19,13 @@ dependencies = [
   "scipy",
   "gemmi",
   "pillow",
+  "supabase>=2.3.0",
+  "keyring==25.7.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest", "pypdf", "pyinstaller==6.22.3"]
+server-tests = ["fastapi", "SQLAlchemy", "argon2-cffi", "PyJWT", "pydantic-settings", "tzdata"]
 
 [project.scripts]
 qrksdock = "qrksdock.cli:main"

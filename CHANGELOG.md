@@ -9,6 +9,29 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.5.0] - 2026-11-08
+
+### Added
+- **QRKSDock server** (`server/`): a small FastAPI service for sign-in, run codes and activity logs. All docking computation stays on the laptops. Includes Docker, HTTPS proxy (Caddy), backup and dynamic-DNS scripts, an admin command-line tool, and a runbook (`server/README.md`).
+- **Central sign-in.** Passwords live only on the server (Argon2id). A temporary password works once and expires after 7 days; after the first change it is dead on every laptop. Sessions use 15-minute access tokens and rotating refresh tokens; a replayed token ends the whole session. Lockout is per account and per IP, at most 3 laptops per lead, and a password change signs out every other laptop.
+- **7-day offline grace.** The app resumes your saved sign-in on startup, and keeps working with no internet for up to 7 days after the server last confirmed it. The refresh token is kept in the operating system keychain (macOS Keychain, Windows Credential Manager), never in a file.
+- **Server-issued QDOCK codes**, so two laptops can never create the same code. Creating a new run needs a connection; existing runs work offline.
+- **Activity sync.** Events queue in a local outbox and upload when online (idempotent, retried safely). Only allowed fields are ever queued or accepted: no ligand names, SMILES, sequences, structures or scores leave the laptop. The header shows Online or Offline with the number of events waiting.
+- A run folder created by hand is registered with the server automatically on its first upload.
+- Self-test now checks the OS keychain (required on Windows and Mac) and the TLS certificate bundle in every installer.
+- 66 new tests (29 for the laptop network layer, 9 end-to-end against the real server, 37 for the server).
+
+### Changed
+- If `src/qrksdock/data/server.json` has a server address (or `QRKS_SERVER_URL` is set), the app uses the server and has **no local temporary-password path**. With no address it behaves as in 0.4.x with local accounts (development).
+- `Run.log()` hands each event to an optional sink; the core engine still contains no network code.
+- New dependencies: `httpx`, `keyring`.
+
+### Notes
+- Windows and Mac keychain behaviour is checked by the installers' self-test in GitHub Actions, not here.
+- "Free" hosting has catches: see `server/README.md`. The server runs on any Ubuntu VM.
+- The accounts file from 0.4.0 is unused whenever a server is configured. Set up accounts on the server with `python -m app.admin init`.
+- Next: v0.6.0 report changes (Canva layout, peptide section rule, PyMOL images).
+
 ## [0.4.1] - 2026-11-07
 
 ### Changed

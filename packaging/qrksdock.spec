@@ -19,15 +19,19 @@ datas += [(str(p), "bin") for p in vina]
 
 for pkg in ("pdb2pqr", "propka", "meeko", "molscrub", "reportlab"):
     datas += collect_data_files(pkg)
-for dist in ("meeko", "molscrub", "pdb2pqr", "propka", "rdkit", "reportlab", "PySide6-Essentials"):
+for dist in ("meeko", "molscrub", "pdb2pqr", "propka", "rdkit", "reportlab", "PySide6-Essentials", "keyring"):
     try:
         datas += copy_metadata(dist)
     except Exception:
         pass
 
 hidden = []
-for pkg in ("meeko", "molscrub", "pdb2pqr", "propka", "qrksdock"):
-    hidden += collect_submodules(pkg)
+for pkg in ("meeko", "molscrub", "pdb2pqr", "propka", "qrksdock", "keyring", "win32ctypes", "jaraco", "httpx", "httpcore", "anyio", "certifi"):
+    try:                                    # win32ctypes exists only on Windows, so a missing package is fine
+        hidden += collect_submodules(pkg)
+    except Exception:
+        pass
+datas += collect_data_files("certifi")
 
 a = Analysis([str(ROOT / "packaging" / "entry.py")], pathex=[str(ROOT / "src")], datas=datas,
              hiddenimports=hidden, excludes=["tkinter", "matplotlib", "IPython", "pytest", "PySide6.QtWebEngineCore",

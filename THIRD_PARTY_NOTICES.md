@@ -16,6 +16,8 @@ QRKSDock bundles or depends on the open-source software below. License names are
 | reportlab | 4.4.10 | BSD License | https://www.reportlab.com/ |
 | numpy | 2.4.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | https://numpy.org |
 | pillow | 12.1.1 | MIT-CMU | https://github.com/python-pillow/Pillow/releases |
+| httpx | not installed | | |
+| keyring | not installed | | |
 
 ## Licensing flag: the Scrubber is GPL-3.0
 `molscrub` (the Scrubber used for protonation and 3D generation) declares the GNU GPL v3. Using QRKSDock inside QRKS Scientific is unaffected.

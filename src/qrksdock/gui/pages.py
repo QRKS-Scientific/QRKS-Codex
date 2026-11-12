@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFontDatabase
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
                                QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSpinBox, QTableWidget,
                                QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
@@ -17,7 +17,8 @@ from qrksdock.core import box as boxmod
 from qrksdock.core import ligands, receptor, rules, vina_runner
 from qrksdock.core.pipeline import DockParams, Project
 from qrksdock.core.report import generate_report
-from qrksdock.core.runs import Run, RunError, list_runs, next_qdock_code
+from qrksdock.core.runs import Run, RunError, list_runs, next_qdock_code, normalize_client_code
+from qrksdock.net.errors import NetError, Offline
 
 P = brand.ACTIVE
 
@@ -204,8 +205,21 @@ class ProjectPage(Page):
     # ---- create / open ------------------------------------------------------------------------
     def _new(self):
         try:
-            run = Run.create(self.root(), self.client_edit.text(), self.win.operator, self.pkg_combo.currentData() or None)
-        except (RunError, OSError) as exc:
+            client = normalize_client_code(self.client_edit.text())
+            package = self.pkg_combo.currentData() or None
+            code = None
+            if self.win.net:                                         # the server issues codes, so two laptops can never collide
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+                try:
+                    code = self.win.net.create_run(client, package or "")
+                finally:
+                    QApplication.restoreOverrideCursor()
+            run = Run.create(self.root(), client, self.win.operator, package, qdock_code=code)
+        except Offline:
+            QMessageBox.warning(self, "New run", "Creating a run needs a connection to the QRKS server, so QDOCK codes stay unique across laptops. "
+                                "Connect to the internet and try again, or open an existing run to keep working offline.")
+            return
+        except (RunError, NetError, OSError) as exc:
             QMessageBox.warning(self, "New run", str(exc))
             return
         self.win.settings.setValue("runs_root", str(self.root()))
@@ -229,7 +243,10 @@ class ProjectPage(Page):
     # ---- display ---------------------------------------------------------------------------------
     def refresh(self):
         root = self.root()
-        self.next_lbl.setText(f"The next QDOCK code in this folder will be {next_qdock_code(root)}.")
+        if self.win.net:
+            self.next_lbl.setText("The QRKS server issues the next QDOCK code when you create the run.")
+        else:
+            self.next_lbl.setText(f"The next QDOCK code in this folder will be {next_qdock_code(root)}.")
         run = self.win.run
         if run:
             pkg = f"   |   Package {run.package}" if run.package else "   |   No package limit"
