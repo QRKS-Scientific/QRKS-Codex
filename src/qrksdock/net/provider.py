@@ -16,11 +16,11 @@ class RemoteAuthProvider:
     def accounts(self) -> list[dict[str, str]]:
         return rules.roster()                                  # names and RCh. come from the app, so the tiles work offline
 
-    def authenticate(self, initials: str, password: str) -> AuthResult:
-        return self.session.login(initials, password)
+    def authenticate(self, email: str, password: str) -> AuthResult:
+        return self.session.login(email, password)
 
-    def change_password(self, initials: str, current: str, new: str) -> None:
-        self.session.change_password(initials, current, new)
+    def change_password(self, email: str, current: str, new: str) -> None:
+        self.session.change_password(email, current, new)
 
     def resume(self) -> str | None:
         return self.session.resume()

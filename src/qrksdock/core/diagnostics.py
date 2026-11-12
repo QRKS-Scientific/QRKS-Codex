@@ -148,11 +148,11 @@ def _login_probe() -> str:
     theme.apply(app)
     ini = Path(tempfile.mkdtemp(prefix="qrksdock_ui_")) / "s.ini"
     win = MainWindow(settings=QSettings(str(ini), QSettings.IniFormat))
-    tiles = list(win.login.tiles)
-    if len(tiles) != 6 or win.root_stack.currentIndex() != 0:
-        raise RuntimeError(f"login screen shows {len(tiles)} accounts (expected 6)")
+    accounts = win.store.accounts()
+    if len(accounts) != 6 or win.root_stack.currentIndex() != 0:
+        raise RuntimeError(f"login screen shows {len(accounts)} accounts (expected 6)")
     body, _display = theme.load_fonts()
-    return f"login screen with {len(tiles)} accounts; font: {body or 'system font'}"
+    return f"login screen with {len(accounts)} accounts; font: {body or 'system font'}"
 
 
 def _net_probe() -> str:

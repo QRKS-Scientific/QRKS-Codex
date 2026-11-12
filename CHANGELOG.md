@@ -9,6 +9,21 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.5.1] - 2026-11-12
+
+### Added
+- **Supabase Backend Integration:** Replaced the custom REST API client with the official `supabase` Python SDK for authentication and direct PostgreSQL synchronization (`runs` and `events` tables).
+- **Two-Step Email Sign-In UI:** Added a progressive login flow where entering an email reveals the lead's profile card (avatar, name, and role) before prompting for a password.
+- **Roster Email Mapping:** Added explicit `email` fields for all six company leads in `data/rules.json`.
+
+### Changed
+- Updated `SessionManager` and `RemoteAuthProvider` to authenticate via Supabase Auth (`sign_in_with_password`) and persist session tokens in the OS keychain.
+- Updated `SyncService` to insert run codes and filtered outbox telemetry events directly into Supabase tables.
+- Updated `AccountStore` offline fallback authentication to accept email identifiers alongside initials.
+
+### Removed
+- Deprecated custom FastAPI server routing, Docker/Caddy deployment scripts, and manual JWT refresh rotation in favor of Supabase-managed infrastructure.
+
 ## [0.5.0] - 2026-11-08
 
 ### Added

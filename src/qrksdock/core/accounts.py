@@ -106,6 +106,16 @@ class AccountStore:
     def _shipped(self) -> dict[str, Any]:
         return self._read(self.shipped_file).get("accounts", {})
 
+    def _resolve_initials(self, identifier: str) -> str:
+        ident = identifier.strip()
+        if "@" in ident:
+            for person in rules.roster():
+                roster_email = (person.get("email") or f"{person['initials'].lower()}@qrks.com").lower()
+                if roster_email == ident.lower():
+                    return person["initials"]
+            return ident.split("@")[0].upper()
+        return ident.upper()
+
     # ---- who can sign in ---------------------------------------------------------------------------------
     def accounts(self) -> list[dict[str, str]]:
         """The leads from the roster who have a credential record, in roster order."""
@@ -120,7 +130,8 @@ class AccountStore:
         rec = self._read(self._attempt_file).get(initials, {})
         return max(0, int(rec.get("locked_until", 0) - self.clock()))
 
-    def authenticate(self, initials: str, password: str) -> AuthResult:
+    def authenticate(self, identifier: str, password: str) -> AuthResult:
+        initials = self._resolve_initials(identifier)
         wait = self._lock_remaining(initials)
         if wait:
             return AuthResult(False, message=f"Too many wrong passwords. Try again in {wait} s.", locked_for=wait)
@@ -160,7 +171,8 @@ class AccountStore:
         return "Local accounts (development mode)"
 
     # ---- password change ---------------------------------------------------------------------------------------------
-    def change_password(self, initials: str, current_password: str, new_password: str) -> None:
+    def change_password(self, identifier: str, current_password: str, new_password: str) -> None:
+        initials = self._resolve_initials(identifier)
         problem = password_problem(new_password, current_password, initials)
         if problem:
             raise ValueError(problem)

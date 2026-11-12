@@ -14,10 +14,10 @@ QRKSDock bundles or depends on the open-source software below. License names are
 | pdb2pqr | 3.8.0 | BSD License | https://www.poissonboltzmann.org |
 | propka | 3.5.1 | GNU Lesser General Public License v2 (LGPLv2) | http://propka.org |
 | reportlab | 4.4.10 | BSD License | https://www.reportlab.com/ |
-| numpy | 2.4.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | https://numpy.org |
-| pillow | 12.1.1 | MIT-CMU | https://github.com/python-pillow/Pillow/releases |
-| httpx | not installed | | |
-| keyring | not installed | | |
+| numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | https://numpy.org |
+| pillow | 13.0.0 | MIT-CMU | https://pillow.readthedocs.io/en/stable/releasenotes/index.html |
+| httpx | 0.28.1 | BSD License | https://github.com/encode/httpx/blob/master/CHANGELOG.md |
+| keyring | 25.7.0 | MIT | https://github.com/jaraco/keyring |
 
 ## Licensing flag: the Scrubber is GPL-3.0
 `molscrub` (the Scrubber used for protonation and 3D generation) declares the GNU GPL v3. Using QRKSDock inside QRKS Scientific is unaffected.

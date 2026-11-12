@@ -110,19 +110,18 @@ def _store(tmp_path):
 
 def test_login_screen_lists_six_accounts_and_has_no_signup(tmp_path):
     from PySide6.QtWidgets import QPushButton
-    from qrksdock.gui.app import MainWindow
     _app()
     win = _win(tmp_path)
-    assert win.root_stack.currentIndex() == 0 and list(win.login.tiles) == ["LEM", "JER", "LPA", "JCG", "JML", "ERD"]
+    assert win.root_stack.currentIndex() == 0
+    assert [a["initials"] for a in win.store.accounts()] == ["LEM", "JER", "LPA", "JCG", "JML", "ERD"]
     texts = " ".join(b.text().lower() for b in win.login.findChildren(QPushButton))
-    assert "sign in" in texts and "register" not in texts and "create account" not in texts and "sign up" not in texts
-    assert not win.login.go.isEnabled()                                          # no account chosen yet
+    assert "sign in" in texts and "continue" in texts
+    assert "register" not in texts and "create account" not in texts and "sign up" not in texts
+    assert not win.login.next_btn.isEnabled() and not win.login.go.isEnabled()
     assert not any(a.isEnabled() for a in win._gated)                            # menus that need a user are off
 
 
 def test_full_sign_in_with_forced_password_change_and_sign_out(tmp_path, monkeypatch):
-    from PySide6.QtWidgets import QDialog
-    from qrksdock.gui.app import MainWindow
     from qrksdock.gui.login import ChangePasswordDialog
     _app()
     win = _win(tmp_path)
@@ -133,23 +132,25 @@ def test_full_sign_in_with_forced_password_change_and_sign_out(tmp_path, monkeyp
         self._save()
         return self.result()
     monkeypatch.setattr(ChangePasswordDialog, "exec", fake_exec)
-    win.login._select("JER")
+    win.login.email.setText("jer@qrks.com")
+    win.login._advance_to_password()
+    assert not win.login.auth_step.isHidden() and win.login.name_lbl.text() == "John E. Rico, RCh."
     win.login.password.setText("TEMP-JER-0001")
     win.login._submit()
     assert win.root_stack.currentIndex() == 1 and win.operator == "JER"
     assert win.user_name.text() == "John E. Rico, RCh." and win.user_role.text() == "Operations Lead"
-    assert win.store.authenticate("JER", "river-Stone-84-lamp").ok
+    assert win.store.authenticate("jer@qrks.com", "river-Stone-84-lamp").ok
     win.sign_out()
     assert win.root_stack.currentIndex() == 0 and win.operator == "" and win.run is None
-    assert win.login.selected == "JER" and not win.login.password.text()         # tile is remembered, password is cleared
+    assert win.login.auth_step.isHidden() and not win.login.email.text() and not win.login.password.text()
 
 
 def test_wrong_password_shows_attempts_then_locks_the_button(tmp_path):
-    from qrksdock.gui.app import MainWindow
     _app()
     win = _win(tmp_path)
     login = win.login
-    login._select("LEM")
+    login.email.setText("lem@qrks.com")
+    login._advance_to_password()
     login.password.setText("wrong")
     login._submit()
     assert not login.msg.isHidden() and "4 attempts left" in login.msg.text() and win.root_stack.currentIndex() == 0
@@ -164,7 +165,6 @@ def test_wrong_password_shows_attempts_then_locks_the_button(tmp_path):
 
 def test_sign_out_is_blocked_while_a_job_runs(tmp_path, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
-    from qrksdock.gui.app import MainWindow
     _app()
     win = _win(tmp_path)
     win.sign_in("LEM")
@@ -179,7 +179,7 @@ def test_missing_accounts_file_is_reported_not_silent(tmp_path):
     _app()
     empty = acc.AccountStore(shipped_file=tmp_path / "nothing.json", local_dir=tmp_path / "local")
     win = _win(tmp_path, empty)
-    assert not win.login.tiles and not win.login.msg.isHidden() and "No accounts were found" in win.login.msg.text()
+    assert not win.store.accounts() and not win.login.msg.isHidden() and "No accounts were found" in win.login.msg.text()
 
 
 def test_packaging_spec_bundles_accounts_and_rules():

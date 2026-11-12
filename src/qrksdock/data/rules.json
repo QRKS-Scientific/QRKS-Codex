@@ -29,36 +29,42 @@
   "roster": [
     {
       "initials": "LEM",
+      "email": "lem@qrks.com",
       "name": "Lars E. Medice",
       "role": "Technical Lead",
       "credential": "RCh."
     },
     {
       "initials": "JER",
+      "email": "jer@qrks.com",
       "name": "John E. Rico",
       "role": "Operations Lead",
       "credential": "RCh."
     },
     {
       "initials": "LPA",
+      "email": "lpa@qrks.com",
       "name": "Lester P. Abdon",
       "role": "Sales Lead",
       "credential": "RCh."
     },
     {
       "initials": "JCG",
+      "email": "jcg@qrks.com",
       "name": "Josiah C. Guillermo",
       "role": "Finance Lead",
       "credential": "RCh."
     },
     {
       "initials": "JML",
+      "email": "jml@qrks.com",
       "name": "Jason M. Llamera",
       "role": "Documentations Lead",
       "credential": "RCh."
     },
     {
       "initials": "ERD",
+      "email": "erd@qrks.com",
       "name": "Erwin R. Desaliza",
       "role": "Marketing Lead",
       "credential": "RCh."

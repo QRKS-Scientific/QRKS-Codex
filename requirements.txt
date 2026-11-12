@@ -12,5 +12,5 @@ scipy
 gemmi
 pillow
 supabase
-supabase-auth
+supabase_auth
 keyring==25.7.0

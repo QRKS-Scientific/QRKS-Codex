@@ -29,9 +29,10 @@ def test_rch_appears_on_the_login_tiles_header_and_report(tmp_path, monkeypatch)
     from test_app import _app, _win
     _app()
     win = _win(tmp_path)
-    assert "Lars E. Medice, RCh." in win.login.tiles["LEM"].text()
-    assert "Josiah C. Guillermo, RCh." in win.login.tiles["JCG"].text()
-    assert all("RCh." in tile.text() for tile in win.login.tiles.values())        # all six tiles
+    for person in rules.roster():
+        win.login.email.setText(person["email"])
+        win.login._advance_to_password()
+        assert "RCh." in win.login.name_lbl.text()
     win.sign_in("JCG")
     assert win.user_name.text() == "Josiah C. Guillermo, RCh."
     assert "Josiah C. Guillermo, RCh." in win.status_lbl.text()

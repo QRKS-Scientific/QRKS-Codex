@@ -3,18 +3,28 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Tuple
 
 from qrksdock import paths
 
 GRACE_DAYS = 7                      # how long a cached sign-in keeps working with no internet
 
 
-def server_url() -> str | None:
-    env = os.environ.get("QRKS_SERVER_URL", "").strip()
-    if env:
-        return env
+def supabase_credentials() -> Tuple[str | None, str | None]:
+    env_url = os.environ.get("SUPABASE_URL", "").strip()
+    env_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+    if env_url and env_key:
+        return env_url, env_key
     try:
-        url = json.loads(paths.data_file("server.json").read_text(encoding="utf-8")).get("url", "").strip()
+        data = json.loads(paths.data_file("server.json").read_text(encoding="utf-8"))
+        url = data.get("supabase_url", "").strip()
+        key = data.get("supabase_anon_key", "").strip()
+        return url or None, key or None
     except (OSError, json.JSONDecodeError):
-        url = ""
-    return url or None
+        return None, None
+
+
+def server_url() -> str | None:
+    """Backward-compatible helper returning the configured Supabase URL."""
+    url, _ = supabase_credentials()
+    return url

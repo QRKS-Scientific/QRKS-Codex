@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,20 +7,11 @@ from typing import Callable
 
 from qrksdock import paths
 from qrksdock.net.client import ApiClient
+from qrksdock.net.config import supabase_credentials
 from qrksdock.net.outbox import Outbox
 from qrksdock.net.session import SessionManager
 from qrksdock.net.store import SecretStore, default_store
 from qrksdock.net.sync import SyncService
-
-def get_supabase_config() -> tuple[str, str]:
-    """Reads the Supabase URL and Key from server.json"""
-    config_path = paths.user_data_dir() / "server.json"
-    try:
-        with open(config_path, "r") as f:
-            data = json.load(f)
-            return data.get("supabase_url", ""), data.get("supabase_key", "")
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "", ""
 
 @dataclass
 class NetServices:
@@ -34,7 +24,7 @@ class NetServices:
     def create(cls, *, store: SecretStore | None = None,
                outbox_path: Path | None = None, clock: Callable[[], float] = time.time) -> "NetServices | None":
         
-        url, key = get_supabase_config()
+        url, key = supabase_credentials()
         if not url or not key:
             return None
             
