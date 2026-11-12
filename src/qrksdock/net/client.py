@@ -13,8 +13,12 @@ class ApiClient:
         self.supabase: Client = create_client(supabase_url, supabase_key)
 
     # ---- sign-in -----------------------------------------------------------------------------------------
-    def login(self, email: str, password: str):
+    def login(self, initials: str, password: str):
         try:
+            # Map team initials to your Supabase email format
+            clean_initials = initials.strip().lower()
+            email = f"{clean_initials}@qrks.com"
+            
             res = self.supabase.auth.sign_in_with_password({"email": email, "password": password})
             return res
         except Exception as e:

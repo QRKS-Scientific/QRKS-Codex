@@ -46,7 +46,7 @@ class SessionManager:
         res = self.api.me()
         if res and res.user:
             # Assuming initials are stored in Supabase user metadata
-            self.initials = res.user.user_metadata.get("initials", res.user.email[:2].upper())
+            self.initials = res.user.user_metadata.get("initials", res.user.email[:2].upper()) # <-- RIGHT HERE
             self.display_name = res.user.user_metadata.get("display_name", self.initials)
             self.offline = False
         else:
