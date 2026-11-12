@@ -21,7 +21,6 @@ dependencies = [
   "pillow",
   "supabase",
   "supabase-auth",
-  "supabase>=2.3.0",
   "keyring==25.7.0",
 ]
 
