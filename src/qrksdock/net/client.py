@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any
 from supabase import create_client, Client
-from gotrue.errors import AuthApiError
 
 from qrksdock.net.errors import ApiError, Offline
 
@@ -18,10 +17,11 @@ class ApiClient:
         try:
             res = self.supabase.auth.sign_in_with_password({"email": email, "password": password})
             return res
-        except AuthApiError as e:
-            raise ApiError(status=400, message=str(e))
         except Exception as e:
-            raise Offline(f"Connection failed: {e}")
+            err_msg = str(e)
+            if "Connection" in err_msg or "timeout" in err_msg.lower():
+                raise Offline(f"Connection failed: {e}")
+            raise ApiError(status=400, message=err_msg)
 
     def logout(self):
         self.supabase.auth.sign_out()
@@ -30,7 +30,7 @@ class ApiClient:
         try:
             res = self.supabase.auth.update_user({"password": new_password})
             return res
-        except AuthApiError as e:
+        except Exception as e:
             raise ApiError(status=400, message=str(e))
 
     def me(self):
