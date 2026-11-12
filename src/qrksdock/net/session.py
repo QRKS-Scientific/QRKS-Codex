@@ -39,27 +39,38 @@ class SessionManager:
         self._restore_supabase_session()
 
     def _restore_supabase_session(self) -> None:
-        raw = self.store.get("session")
-        if raw:
-            try:
-                saved = json.loads(raw)
-                self.api.sb.auth.set_session(saved["access_token"], saved["refresh_token"])
-                self.initials = saved.get("initials", "")
-            except Exception:
-                self.store.delete("session")
+        try:
+            raw = self.store.get("session")
+            if raw:
+                try:
+                    saved = json.loads(raw)
+                    self.api.sb.auth.set_session(saved["access_token"], saved["refresh_token"])
+                    self.initials = saved.get("initials", "")
+                except Exception:
+                    self.store.delete("session")
+        except Exception:
+            # Bypass OS keychain errors on restricted local macOS execution
+            pass
 
     def _persist_session(self, session, initials: str) -> None:
         self.initials = initials
-        self.store.set("session", json.dumps({
-            "access_token": session.access_token,
-            "refresh_token": session.refresh_token,
-            "initials": initials,
-            "last_verified": self.clock(),
-        }))
+        try:
+            self.store.set("session", json.dumps({
+                "access_token": session.access_token,
+                "refresh_token": session.refresh_token,
+                "initials": initials,
+                "last_verified": self.clock(),
+            }))
+        except Exception:
+            # Bypass OS keychain errors on restricted local macOS execution
+            pass
 
     def _end(self) -> None:
         self.initials = ""
-        self.store.delete("session")
+        try:
+            self.store.delete("session")
+        except Exception:
+            pass
         try:
             self.api.sb.auth.sign_out()
         except Exception:

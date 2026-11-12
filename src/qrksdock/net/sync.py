@@ -1,7 +1,7 @@
 """Uploads queued events and asks the server for run codes via Supabase SDK."""
 from __future__ import annotations
 
-import uuid
+from datetime import datetime
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -22,11 +22,25 @@ class SyncService:
         self.api, self.session, self.outbox = api, session, outbox
 
     def create_run(self, client_code: str, package: str = "") -> str:
-        """Create a new run directly in the Supabase 'runs' table."""
+        """Create a new run directly in the Supabase 'runs' table with date-based coding."""
         if not self.session.access():
             raise Offline("no session")
         
-        run_code = f"QDOCK-{uuid.uuid4().hex[:6].upper()}"
+        date_str = datetime.now().strftime("%y%m%d")
+        prefix = f"QDOCK-{date_str}-"
+        
+        try:
+            res = self.api.sb.table("runs").select("code").ilike("code", f"{prefix}%").execute()
+            existing_codes = [row["code"] for row in (res.data or [])]
+        except Exception:
+            existing_codes = []
+            
+        seq = 1
+        while f"{prefix}{seq:03d}" in existing_codes:
+            seq += 1
+            
+        run_code = f"{prefix}{seq:03d}"
+        
         data = {
             "code": run_code,
             "client_code": client_code,

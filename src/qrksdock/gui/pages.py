@@ -160,7 +160,7 @@ class ProjectPage(Page):
             lim = rules.tier_limits(t)
             self.pkg_combo.addItem(f"{t}: {lim['small_molecules']} small molecules, {lim['peptides']} peptides", t)
         self.pkg_combo.setMinimumContentsLength(34)
-        self.new_btn = button("Create run")
+        self.new_btn = button("New Run")
         self.open_btn = button("Open run folder…", True)
         self.new_btn.clicked.connect(self._new)
         self.open_btn.clicked.connect(self._open)
