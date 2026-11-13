@@ -34,7 +34,7 @@ for pkg in ("meeko", "molscrub", "pdb2pqr", "propka", "qrksdock", "keyring", "wi
 datas += collect_data_files("certifi")
 
 a = Analysis([str(ROOT / "packaging" / "entry.py")], pathex=[str(ROOT / "src")], datas=datas,
-             hiddenimports=hidden, excludes=["tkinter", "matplotlib", "IPython", "pytest", "PySide6.QtWebEngineCore",
+             hiddenimports=hidden, excludes=["tkinter", "matplotlib", "IPython", "pytest",
                                               "PySide6.QtQml", "PySide6.QtQuick", "PySide6.Qt3DCore"],
              noarchive=False)
 pyz = PYZ(a.pure)
