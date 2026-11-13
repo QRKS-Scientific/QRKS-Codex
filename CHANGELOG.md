@@ -23,6 +23,7 @@ The version number is written only in `src/qrksdock/__init__.py`.
 ### Fixed
 - Improved selected-pose atom reconstruction and mapping for interaction diagrams.
 - Corrected the molecular-surface control so it updates the receptor surface.
+- Corrected the PySide6-WebEngine pin so the GitHub release build can install dependencies on Python 3.12.
 
 ## [0.5.1] - 2026-11-12
 

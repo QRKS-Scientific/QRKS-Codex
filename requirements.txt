@@ -1,7 +1,7 @@
 # Pinned to the versions QRKSDock was built and tested with.
 # Install with:  pip install -r requirements.txt
 PySide6-Essentials==6.12.0
-PySide6-WebEngine==6.12.0
+PySide6-WebEngine==6.12.0.140
 rdkit==2026.9.1
 meeko==0.8.0
 molscrub==0.3.2
