@@ -35,7 +35,8 @@ datas += collect_data_files("certifi")
 
 a = Analysis([str(ROOT / "packaging" / "entry.py")], pathex=[str(ROOT / "src")], datas=datas,
              hiddenimports=hidden, excludes=["tkinter", "matplotlib", "IPython", "pytest",
-                                              "PySide6.QtQml", "PySide6.QtQuick", "PySide6.Qt3DCore"],
+                                              "PyQt5", "prody", "PySide6.QtQml", "PySide6.QtQuick",
+                                              "PySide6.Qt3DCore"],
              noarchive=False)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="QRKSDock", console=False,

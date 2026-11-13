@@ -7,12 +7,12 @@ from typing import Any, Callable
 from rdkit import Chem
 from rdkit.Chem import rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QFrame, QVBoxLayout
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-from qrksdock import brand
+from qrksdock import brand, paths
 from qrksdock.core.contacts import DiagramInteraction, ResidueStructure
 P = brand.ACTIVE
 
@@ -61,7 +61,7 @@ HTML_TEMPLATE = f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+    <script src="vendor/3dmol/3Dmol-min.js"></script>
     <style>
         body {{ margin: 0; padding: 0; background-color: {P.surface}; overflow: hidden; font-family: -apple-system, sans-serif; }}
         #container {{ width: 100vw; height: 100vh; position: relative; }}
@@ -983,7 +983,7 @@ class MolViewer(QFrame):
         self.web = QWebEngineView()
         self.web.page().setBackgroundColor(QColor(P.surface))
         lay.addWidget(self.web)
-        self.web.setHtml(HTML_TEMPLATE)
+        self.web.setHtml(HTML_TEMPLATE, QUrl.fromLocalFile(str(paths.asset()) + "/"))
 
     def load_receptor(self, text_data: str, fmt: str = "pdb") -> None:
         safe_text = json.dumps(text_data)

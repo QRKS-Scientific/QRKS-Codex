@@ -8,7 +8,44 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 from rdkit import Chem
 
-from qrksdock.gui.viewer import MolViewer, _draw_molecule_data
+from qrksdock import paths
+from qrksdock.gui.viewer import HTML_TEMPLATE, MolViewer, _draw_molecule_data
+
+
+def test_bundled_3dmol_javascript_loads():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    assert paths.asset("vendor", "3dmol", "3Dmol-min.js").is_file()
+    assert 'src="vendor/3dmol/3Dmol-min.js"' in HTML_TEMPLATE
+    app = QApplication.instance() or QApplication([])
+    viewer = MolViewer()
+    loop = QEventLoop()
+    result = {}
+
+    def on_timeout():
+        result.setdefault("error", "Viewer page load timed out")
+        loop.quit()
+
+    def on_library_loaded(available):
+        result["available"] = available
+        loop.quit()
+
+    def on_load(ok):
+        if not ok:
+            result["error"] = "Viewer page failed to load"
+            loop.quit()
+            return
+        viewer.web.page().runJavaScript(
+            "typeof $3Dmol !== 'undefined' && typeof $3Dmol.createViewer === 'function'",
+            on_library_loaded,
+        )
+
+    viewer.web.loadFinished.connect(on_load)
+    QTimer.singleShot(30000, on_timeout)
+    loop.exec()
+    app.processEvents()
+    viewer.close()
+    assert "error" not in result, result.get("error")
+    assert result["available"], "Bundled 3Dmol.js did not expose createViewer"
 
 
 def test_diagram_draws_nh2_hydrogens_as_separate_atoms():
@@ -96,17 +133,19 @@ def test_2d_png_export_preserves_edits_and_removes_editing_handles():
     def on_diagram(_):
         viewer.web.page().runJavaScript(
             """
-            const root = document.getElementById('poseview-canvas');
-            document.querySelector('.diagram-draggable').setAttribute('transform', 'translate(17 19)');
-            const rotate = document.createElementNS(root.namespaceURI, 'g');
-            rotate.setAttribute('class', 'diagram-rotate-handle');
-            root.appendChild(rotate);
-            const edit = document.createElementNS(root.namespaceURI, 'circle');
-            edit.setAttribute('class', 'hydrophobic-edit-handle');
-            root.appendChild(edit);
-            const hitArea = document.createElementNS(root.namespaceURI, 'rect');
-            hitArea.setAttribute('fill', 'transparent');
-            root.appendChild(hitArea);
+            (() => {
+                const root = document.getElementById('poseview-canvas');
+                document.querySelector('.diagram-draggable').setAttribute('transform', 'translate(17 19)');
+                const rotate = document.createElementNS(root.namespaceURI, 'g');
+                rotate.setAttribute('class', 'diagram-rotate-handle');
+                root.appendChild(rotate);
+                const edit = document.createElementNS(root.namespaceURI, 'circle');
+                edit.setAttribute('class', 'hydrophobic-edit-handle');
+                root.appendChild(edit);
+                const hitArea = document.createElementNS(root.namespaceURI, 'rect');
+                hitArea.setAttribute('fill', 'transparent');
+                root.appendChild(hitArea);
+            })();
             """,
             on_mutation,
         )
