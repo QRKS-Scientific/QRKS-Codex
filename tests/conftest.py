@@ -34,8 +34,8 @@ def isolated_user_data(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "user_data_dir", lambda: d)
     try:
         from PySide6.QtCore import QSettings
-        QSettings.setDefaultFormat(QSettings.IniFormat)
-        QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(d / "qt"))
+        QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(d / "qt"))
     except ImportError:
         pass
     return d

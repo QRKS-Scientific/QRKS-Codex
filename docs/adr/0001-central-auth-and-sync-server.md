@@ -1,6 +1,6 @@
 # ADR 0001: Central sign-in and sync server, local compute
 
-Status: **Accepted and built in v0.5.0** (steps 1-4 of the build plan). Sheets dashboard worker is still to come.
+Status: **Superseded by the Supabase Auth and Postgres integration in v0.5.1.** This ADR records the earlier custom FastAPI server proposal and implementation.
 Decided by: QRKS Scientific technical lead. Date: 2026-11-07, decisions confirmed 2026-11-08.
 
 ## Decisions confirmed

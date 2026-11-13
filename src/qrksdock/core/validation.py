@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from rdkit import Chem, RDLogger
+from rdkit import Chem, rdBase
 from rdkit.Chem import rdMolAlign
 
 from qrksdock.core import rules
@@ -31,7 +31,7 @@ def pose_mol(out_pdbqt: Path) -> Chem.Mol:
     """Poses from a Vina output PDBQT as one RDKit molecule with one conformer per pose."""
     from meeko import PDBQTMolecule, RDKitMolCreate
 
-    RDLogger.DisableLog("rdApp.*")
+    rdBase.DisableLog("rdApp.*")
     pm = PDBQTMolecule(Path(out_pdbqt).read_text(), skip_typing=True)
     mols = RDKitMolCreate.from_pdbqt_mol(pm)
     if not mols or mols[0] is None:

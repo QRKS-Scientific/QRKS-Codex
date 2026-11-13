@@ -1,10 +1,10 @@
 # QRKSDock Desktop
 
 The QRKS Scientific protein-ligand docking workflow, as a desktop app for Windows and Apple Silicon Macs.
-Runs entirely on the laptop: no server, no cloud. Client data stays in the run folders on Google Drive.
+Docking and client chemistry stay on the laptop. Supabase handles sign-in and permitted run/activity metadata; client structures, ligand names, sequences, scores, and reports remain in the run folders on Google Drive.
 
 Pipeline: receptor PDB (cleaned in PyMOL) -> pdb2pqr/PROPKA protonation at pH 7.4 -> Meeko PDBQT ->
-ligands via the Scrubber and Meeko -> **AutoDock Vina 1.2.7** -> redocking validation -> results table, run manifest, branded PDF report.
+ligands via the Scrubber and Meeko -> **AutoDock Vina 1.2.7** -> redocking validation -> results, interactive 2D/3D pose viewers, run manifest, branded PDF report.
 
 ---
 
@@ -23,8 +23,8 @@ The first time, **right-click the app > Open > Open**. If macOS still refuses, r
 
 ### Signing in
 
-> **Server mode.** When the installer is built with a server address, your account lives on the QRKS server. Your temporary password works once: choose your own at first sign-in. The app remembers your sign-in on that laptop, so it opens straight into your account, and it keeps working with no internet for **7 days** after the server last confirmed it. The header shows **Online** or **Offline** with the number of events waiting to upload. After you **Sign out**, signing in again needs a connection. Creating a new run needs a connection too (the server issues the QDOCK code); existing runs work offline.
-> Local accounts (below) are used only in development builds with no server address.
+> **Supabase mode.** When the installer includes Supabase configuration, your account is managed by QRKS Scientific. Your temporary password works once: choose your own at first sign-in. The app remembers your sign-in on that laptop, so it opens straight into your account, and it keeps working with no internet for **7 days** after Supabase last confirmed it. The header shows **Online** or **Offline** with the number of events waiting to upload. After you **Sign out**, signing in again needs a connection. Creating a new run needs a connection too (Supabase issues the QDOCK code); existing runs work offline.
+> Local accounts are used only in development builds without Supabase configuration.
 
 The app opens on a sign-in screen with the six lead accounts. Choose yours and enter the temporary password the Technical Lead gave you.
 **You must then choose your own password** (at least 10 characters); this is saved on that laptop only. After five wrong passwords the account locks for 30 seconds, and the wait doubles with each further wrong attempt.
@@ -39,7 +39,7 @@ To show your photo instead of initials, save a square photo as `LEM.png` (your o
 2. **Receptor**: choose the PDB you cleaned in PyMOL. Optionally add the co-crystal ligand as `.sdf` (export from PyMOL) for validation and a focused box. Click *Prepare receptor and box*.
 3. **Ligands**: paste `SMILES name` lines (and peptide sequences, 2-6 residues). *Check ligands*, then *Prepare ligands*.
 4. **Docking**: *Run validation* first (redocks the reference ligand; the top pose should be within 2.0 Å of the crystal pose), then *Run docking*. Vina chooses its own random seed and the app records it.
-5. **Results**: ranked table (double-click a ligand name to rename it), the top 10 poses of the selected ligand, estimated pKd, CSV export, the raw Vina log (`vina_output.log`), and the PDF report.
+5. **Results**: ranked table (double-click a ligand name to rename it), the top 10 poses of the selected ligand, estimated pKd, interactive 3D and 2D interaction views, CSV/PNG export, the raw Vina log (`vina_output.log`), and the PDF report.
    Choose **Draft (watermarked)** or **Final (no watermark)** before generating the report.
 
 Everything is saved inside the run folder: `input/`, `work/`, `results/`, `reports/`, `logs/`. Closing the app and reopening the run picks up where you left off.
@@ -49,7 +49,7 @@ Everything is saved inside the run folder: `input/`, `work/`, `results/`, `repor
 * **Cofactors, ions and waters are removed** from the receptor. If a ligand binds next to a cofactor (NADP, heme, a metal), redocking validation will usually fail. That is the validation doing its job, not a bug.
 * Redocking validation was checked on Abl kinase + imatinib (PDB 1IEP): 0.21 Å. It correctly flags 3α-HSD + testosterone (1AFS) when NADP is removed.
 * Peptides of 5-6 residues are very flexible; Vina poses are less reliable. The report says so.
-* Contact residues and polar contacts are simple distance lists, not a validated interaction profile. Use PyMOL for 3D interaction mapping.
+* 2D interactions are geometry-based candidates, not validated hydrogen bonds or experimental evidence. Use PyMOL for 3D interaction analysis.
 * Protein-protein docking and ADMETox are not part of this app.
 
 ---
@@ -78,16 +78,15 @@ Layout: `src/qrksdock/core` is the engine (no GUI imports); `src/qrksdock/gui` i
 | Report wording and layout | `src/qrksdock/core/report.py` |
 | Bundled Vina version | `scripts/fetch_vina.py` (update version and checksums) |
 
-### Connecting to the server
+### Supabase configuration
 
-The server lives in `server/` (see `server/README.md` to deploy it). To make installers use it, set `"url"` in `src/qrksdock/data/server.json` (for example `"https://qrks-example.duckdns.org"`) before tagging a release, or set the `QRKS_SERVER_URL` environment variable when running from source. The address must be `https://` (plain `http://` is allowed only for `localhost`).
-Server tests: `cd server && pip install -r requirements-dev.txt && python -m pytest -q`. The desktop tests that talk to the real server run automatically when the server's packages are installed and skip otherwise.
+The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` together from the environment, or falls back to `supabase_url` and `supabase_anon_key` in `src/qrksdock/data/server.json`. The PyInstaller build bundles this JSON file. Use only the project's anon/publishable key—never a Supabase service-role key—and verify the production project and its access policies before releasing.
 
 ### Releasing
 
-1. Bump the version in `src/qrksdock/__init__.py` only, and add an entry to `CHANGELOG.md`.
-2. Commit, then `git tag v0.1.0 && git push --tags`.
-3. GitHub Actions builds Windows and macOS (Apple Silicon) on GitHub's own machines, runs the tests, **runs a self-test inside each built app**, and publishes a Release.
+1. Update the version in `src/qrksdock/__init__.py` only, add an entry to `CHANGELOG.md`, and verify bundled assets and Supabase configuration.
+2. Run the tests, commit the release changes, then push the commit and a `vX.Y.Z` tag (for example, `git push origin main v0.6.0`).
+3. The tag starts GitHub Actions, which builds Windows and macOS (Apple Silicon), runs the tests, **runs a self-test inside each built app**, and publishes a Release.
    Use *Actions > Build QRKSDock > Run workflow* to build without tagging; the files appear under that run's *Artifacts*.
 
 ### Reproducibility

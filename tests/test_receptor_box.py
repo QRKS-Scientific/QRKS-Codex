@@ -47,3 +47,10 @@ def test_boxes(tmp_path, data):
     assert B.box_warnings(B.box_manual((0, 0, 0), (80, 20, 20)))
     with pytest.raises(ValueError):
         B.box_manual((0, 0, 0), (0, 10, 10))
+
+
+def test_box_vectors_require_three_coordinates():
+    with pytest.raises(ValueError, match="exactly three coordinates"):
+        B.box_manual((0, 0), (10, 10, 10))
+    with pytest.raises(ValueError, match="exactly three coordinates"):
+        B.box_manual((0, 0, 0), (10, 10))

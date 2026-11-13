@@ -52,9 +52,9 @@ def test_preparation_is_deterministic(tmp_path):
 
 def test_reference_ligand_requires_3d(tmp_path):
     from rdkit import Chem
-    from rdkit.Chem import AllChem
+    from rdkit.Chem import rdDepictor
     m = Chem.MolFromSmiles("CCO")
-    AllChem.Compute2DCoords(m)
+    rdDepictor.Compute2DCoords(m)
     w = Chem.SDWriter(str(tmp_path / "flat.sdf"))
     w.write(m)
     w.close()

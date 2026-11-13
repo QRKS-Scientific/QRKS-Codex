@@ -1,3 +1,4 @@
+import base64
 import os
 
 import pytest
@@ -16,7 +17,8 @@ def _win(tmp_path, store=None):
     """A window whose accounts and settings live in the test's own temporary folder."""
     from PySide6.QtCore import QSettings
     from qrksdock.gui.app import MainWindow
-    return MainWindow(store or _store(tmp_path), QSettings(str(tmp_path / "qt.ini"), QSettings.IniFormat))
+    return MainWindow(store or _store(tmp_path),
+                      QSettings(str(tmp_path / "qt.ini"), QSettings.Format.IniFormat))
 
 
 def _app():
@@ -59,6 +61,29 @@ def test_report_type_choice_exists(tmp_path):
     assert rp.report_type.currentIndex() == 0                                    # Draft is the safe default
 
 
+def test_2d_png_export_saves_the_rendered_image(tmp_path, monkeypatch):
+    from PySide6.QtGui import QImage
+    from PySide6.QtWidgets import QMessageBox
+
+    _app()
+    page = _win(tmp_path).pages[4]
+    source = tmp_path / "source.png"
+    image = QImage(1920, 1200, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(0xFFFFFFFF)
+    assert image.save(str(source))
+    data_url = "data:image/png;base64," + base64.b64encode(source.read_bytes()).decode("ascii")
+    saved_messages = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: saved_messages.append(args[2]))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: pytest.fail(args[2]))
+
+    destination = tmp_path / "interaction.png"
+    page._save_2d_diagram_png(data_url, destination)
+
+    saved = QImage(str(destination))
+    assert saved.size().width() == 1920 and saved.size().height() == 1200
+    assert saved_messages and str(destination) in saved_messages[0]
+
+
 def test_docking_page_has_no_seed_and_top10_defaults(tmp_path):
     from PySide6.QtWidgets import QApplication
     from qrksdock.gui import theme
@@ -83,9 +108,11 @@ def test_results_table_rename_by_editing_a_cell(tmp_path, vina_exe):
     win = _win(tmp_path)
     win.sign_in("LEM")
     win.set_run(Run.create(tmp_path, "QC-001", "LEM"))
-    win.project.prepare_receptor(paths.asset("selftest", "mini_receptor.pdb"), box_mode="blind")
-    win.project.prepare_ligands("CCO ethanol\nCCN ethylamine\n", "")
-    win.project.run_docking(DockParams(exhaustiveness=2, cpu=1))
+    project = win.project
+    assert project is not None
+    project.prepare_receptor(paths.asset("selftest", "mini_receptor.pdb"), box_mode="blind")
+    project.prepare_ligands("CCO ethanol\nCCN ethylamine\n", "")
+    project.run_docking(DockParams(exhaustiveness=2, cpu=1))
     win.refresh()
     rp = win.pages[4]
     win.goto("Results")
@@ -94,7 +121,7 @@ def test_results_table_rename_by_editing_a_cell(tmp_path, vina_exe):
     old = cell.data(0x100)                                                    # Qt.UserRole: the ligand's internal id
     cell.setText("My renamed ligand")                                         # same as the user double-clicking and typing
     app.processEvents()
-    assert win.project.display_ligand(old) == "My_renamed_ligand"
+    assert project.display_ligand(old) == "My_renamed_ligand"
     assert any(rp.table.item(r, 1).text() == "My_renamed_ligand" for r in range(rp.table.rowCount()))
 
 

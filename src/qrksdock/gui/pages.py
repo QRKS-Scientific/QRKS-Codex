@@ -1,16 +1,18 @@
 """The five workflow pages. Each page reads and writes through `win.project`; no science here."""
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFontDatabase
+from PySide6.QtGui import QColor, QDesktopServices, QFontDatabase, QImage
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
-                               QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSpinBox, QTableWidget,
-                               QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
+                               QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSizePolicy, QSpinBox,
+                               QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from qrksdock import brand
 from qrksdock.core import box as boxmod
@@ -19,6 +21,7 @@ from qrksdock.core.pipeline import DockParams, Project
 from qrksdock.core.report import generate_report
 from qrksdock.core.runs import Run, RunError, list_runs, next_qdock_code, normalize_client_code
 from qrksdock.net.errors import NetError, Offline
+from qrksdock.gui.viewer import MolViewer
 
 P = brand.ACTIVE
 
@@ -32,7 +35,7 @@ def label(text: str, role: str | None = None, wrap: bool = True) -> QLabel:
     if role:
         lb.setObjectName(role)
     lb.setWordWrap(wrap)
-    lb.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    lb.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     return lb
 
 
@@ -40,7 +43,7 @@ def button(text: str, secondary: bool = False) -> QPushButton:
     b = QPushButton(text)
     if secondary:
         b.setObjectName("secondary")
-    b.setCursor(Qt.PointingHandCursor)
+    b.setCursor(Qt.CursorShape.PointingHandCursor)
     return b
 
 
@@ -71,7 +74,7 @@ def panel(title: str) -> tuple[QFrame, QVBoxLayout]:
 
 
 def mono(widget) -> None:
-    widget.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+    widget.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
 
 
 def fill_table(table: QTableWidget, headers: list[str], rows: list[list], row_colors: list[str | None] | None = None,
@@ -88,22 +91,22 @@ def fill_table(table: QTableWidget, headers: list[str], rows: list[list], row_co
             if editable_cols and c in editable_cols:
                 it.setToolTip("Double-click to rename")
                 if row_ids:
-                    it.setData(Qt.UserRole, row_ids[r])
+                    it.setData(Qt.ItemDataRole.UserRole, row_ids[r])
             else:
-                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if row_colors and row_colors[r]:
                 it.setBackground(QColor(row_colors[r]))
             table.setItem(r, c, it)
     table.verticalHeader().setVisible(False)
-    table.setEditTriggers(QAbstractItemView.DoubleClicked if editable_cols else QAbstractItemView.NoEditTriggers)
-    table.setSelectionBehavior(QAbstractItemView.SelectRows)
+    table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked if editable_cols else QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     table.setAlternatingRowColors(not row_colors)
     hh = table.horizontalHeader()
-    hh.setSectionResizeMode(QHeaderView.ResizeToContents)
+    hh.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     hh.setStretchLastSection(True)                       # the header band always spans the full width
-    hh.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    hh.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     if stretch_col is not None:
-        hh.setSectionResizeMode(stretch_col, QHeaderView.Stretch)
+        hh.setSectionResizeMode(stretch_col, QHeaderView.ResizeMode.Stretch)
         table.setWordWrap(True)
         table.resizeRowsToContents()
 
@@ -209,7 +212,7 @@ class ProjectPage(Page):
             package = self.pkg_combo.currentData() or None
             code = None
             if self.win.net:                                         # the server issues codes, so two laptops can never collide
-                QApplication.setOverrideCursor(Qt.WaitCursor)
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
                 try:
                     code = self.win.net.create_run(client, package or "")
                 finally:
@@ -266,6 +269,7 @@ class ProjectPage(Page):
         self.activity.setPlainText("\n".join(lines))
 
 
+# ---------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------------------------------
 class ReceptorPage(Page):
     title = "Receptor"
@@ -354,6 +358,8 @@ class ReceptorPage(Page):
             if i >= 3:
                 sp.setRange(1, 300)
                 sp.setValue(25)
+            # --- LIVE SPINBOX CONNECTION ---
+            sp.valueChanged.connect(self._draw_manual_box)
             mg.addWidget(sp, 1 if i < 3 else 3, i % 3)
         self.manual_w = QWidget()
         self.manual_w.setLayout(mg)
@@ -364,34 +370,57 @@ class ReceptorPage(Page):
         left.addWidget(self.allow_bad)
         self.go = button("Prepare receptor and box")
         self.go.clicked.connect(self._prepare)
-        left.addWidget(self.go, 0, Qt.AlignLeft)
+        left.addWidget(self.go, 0, Qt.AlignmentFlag.AlignLeft)
         left.addStretch(1)
+
+        # --- RIGHT COLUMN: VIEWER + SUMMARY ---
+        right_col = QVBoxLayout()
+        right_col.setSpacing(16)
+
+        self.viewer = MolViewer()
+        right_col.addWidget(self.viewer, 6)
 
         right_panel, rv = panel("Preparation summary")
         self.result = label("Nothing prepared yet. Choose a receptor and click Prepare receptor and box.", "muted")
-        self.result.setTextFormat(Qt.RichText)
+        self.result.setTextFormat(Qt.TextFormat.RichText)
         rv.addWidget(self.result)
         self.notes = label("", "warn")
         self.notes.hide()
         rv.addWidget(self.notes)
         rv.addStretch(1)
+        right_col.addWidget(right_panel, 4)
+
         cols.addLayout(left, 6)
-        cols.addWidget(right_panel, 4)
+        cols.addLayout(right_col, 4)
         self.body.addLayout(cols, 1)
         self._box_mode_changed()
 
     def _box_mode_changed(self):
-        self.manual_w.setVisible(self.box_combo.currentIndex() == 2)
+        is_manual = self.box_combo.currentIndex() == 2
+        self.manual_w.setVisible(is_manual)
+        if is_manual:
+            self._draw_manual_box()
+        else:
+            if hasattr(self, "viewer"):
+                self.viewer.clear_shapes()
+
+    def _draw_manual_box(self, *_):
+        """Redraws the magenta wireframe box in the 3D viewer when spinboxes change."""
+        if hasattr(self, "viewer") and self.box_combo.currentIndex() == 2:
+            v = [sp.value() for sp in self.manual]
+            self.viewer.add_box(tuple(v[:3]), tuple(v[3:]))
 
     def _pick_pdb(self):
         f, _ = QFileDialog.getOpenFileName(self, "Receptor structure", "", "PDB files (*.pdb *.ent);;All files (*)")
         if f:
             self.pdb_edit.setText(f)
             try:
+                pdb_text = Path(f).read_text(encoding="utf-8")
+                self.viewer.load_receptor(pdb_text, "pdb")
                 s = receptor.inspect_pdb(Path(f))
                 self.inspect_lbl.setText(s.text().replace("\n", "   |   ") + ("\n" + " ".join(s.warnings) if s.warnings else ""))
                 self.inspect_lbl.show()
-            except Exception as exc:                                                    # noqa: BLE001
+            except Exception as exc:
                 self.inspect_lbl.setText(f"Could not read this file: {exc}")
                 self.inspect_lbl.show()
 
@@ -399,6 +428,14 @@ class ReceptorPage(Page):
         f, _ = QFileDialog.getOpenFileName(self, "Reference ligand", "", "Ligand files (*.sdf *.mol *.mol2);;All files (*)")
         if f:
             self.ref_edit.setText(f)
+            try:
+                # --- INSTANT REFERENCE LIGAND PREVIEW ---
+                raw_ref = Path(f).read_text(encoding="utf-8")
+                fmt = Path(f).suffix.lstrip(".").lower()
+                if fmt in ["sdf", "mol", "mol2"]:
+                    self.viewer.add_reference(raw_ref, fmt)
+            except Exception:
+                pass
 
     def _prepare(self):
         w = self.win
@@ -425,7 +462,7 @@ class ReceptorPage(Page):
             return proj.prepare_receptor(Path(pdb), log=log, **kwargs)
 
         def done(_res):
-            w.pages[3]._touched = False             # a new box means the exhaustiveness advice applies again
+            w.pages[3]._touched = False
             w.refresh()
 
         w.run_job(job, done, "Preparing receptor…")
@@ -448,6 +485,7 @@ class ReceptorPage(Page):
             removed = ", ".join(f"{k} x{v}" for k, v in rec["removed"].items()) or "none"
             states = ", ".join(f"{k} x{v}" for k, v in rec["residue_states"].items()) or "none assigned"
             prot = f"pdb2pqr with PROPKA at pH {rec['ph']}" if rec["method"] == "pdb2pqr" else "supplied by you (already protonated)"
+
             self._style("")
             self.result.setText(self._rows([
                 ("Search box", p.box.summary()),
@@ -456,10 +494,26 @@ class ReceptorPage(Page):
                 ("Removed from the receptor", removed),
                 ("Protonation", prot),
                 ("Histidine and other titratable states", states),
-                ("Reference ligand", "ready for validation" if p.reference_ready else "none")]))
+                ("Reference ligand", "ready for validation" if p.reference_ready else "none")
+            ]))
+
             warns = rec.get("warnings", [])
             self.notes.setText("\n".join(warns))
             self.notes.setVisible(bool(warns))
+
+            # LOAD RECEPTOR, BOX, AND REFERENCE INTO VIEWER ON REOPEN:
+            pdb_path = self.win.run.path / rec["clean_pdb"]
+            if pdb_path.exists():
+                try:
+                    self.viewer.load_receptor(pdb_path.read_text(encoding="utf-8"), "pdb")
+                    if p.box and p.box.mode == "manual":
+                        self.viewer.add_box(p.box.center, p.box.size)
+                    if p.reference_ready:
+                        sdf_path = self.win.run.path / p.s["reference"]["sdf"]
+                        if sdf_path.exists():
+                            self.viewer.add_reference(sdf_path.read_text(encoding="utf-8"), "sdf")
+                except Exception:
+                    pass
         else:
             self._style("muted")
             self.result.setText("Nothing prepared yet. Choose a receptor and click Prepare receptor and box.")
@@ -467,12 +521,21 @@ class ReceptorPage(Page):
 
 
 # ---------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------
 class LigandsPage(Page):
     title = "Ligands"
     blurb = "One ligand per line. Small molecules as 'SMILES name', peptides as 'SEQUENCE name' (2-6 residues, one-letter codes)."
 
     def __init__(self, win):
         super().__init__(win)
+
+        # Use a horizontal layout to split Form/Table (left) and Viewer (right)
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+
+        left = QVBoxLayout()
+        left.setSpacing(16)
+
         self.tabs = QTabWidget()
         self.small = QPlainTextEdit()
         self.small.setPlaceholderText("C1=CC=C(C(=C1)C(=O)C[C@@H](C(=O)O)N)N  L-kynurenine\n# lines starting with # are ignored")
@@ -484,7 +547,7 @@ class LigandsPage(Page):
         self.tabs.addTab(self.small, "Small molecules")
         self.tabs.addTab(self.pept, "Peptides")
         self.tabs.setMaximumHeight(210)
-        self.body.addWidget(self.tabs)
+        left.addWidget(self.tabs)
 
         row = QHBoxLayout()
         load = button("Load file…", True)
@@ -502,11 +565,24 @@ class LigandsPage(Page):
         row.addStretch(1)
         row.addWidget(self.check_btn)
         row.addWidget(self.prep_btn)
-        self.body.addLayout(row)
-        self.body.addWidget(self.count_lbl)
+        left.addLayout(row)
+        left.addWidget(self.count_lbl)
 
         self.table = QTableWidget()
-        self.body.addWidget(self.table, 1)
+        self.table.itemSelectionChanged.connect(self._preview_ligand)
+        left.addWidget(self.table, 1)
+
+        # --- RIGHT COLUMN: LIGAND VIEWER ---
+        right_col = QVBoxLayout()
+        right_col.setSpacing(16)
+
+        self.viewer = MolViewer()
+        right_col.addWidget(self.viewer, 1)
+
+        cols.addLayout(left, 6)
+        cols.addLayout(right_col, 4)
+        self.body.addLayout(cols, 1)
+
         self._counts()
 
     def _policy(self) -> str:
@@ -543,6 +619,30 @@ class LigandsPage(Page):
             colors_.append("#FBE3E0" if c.errors else ("#FFF6E0" if c.warnings else None))
         fill_table(self.table, ["Name", "Type", "Heavy atoms", "Mass (Da)", "Rotatable bonds", "Stereochemistry", "Notes"], rows, colors_, 6)
 
+    def _preview_ligand(self):
+        """Renders the selected prepared ligand structure in 3D when clicked in the table."""
+        w = self.win
+        p = w.project if w else None
+        sel = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+        if not p or not sel or not hasattr(self, "viewer"):
+            return
+        row = sel[0].row()
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        lig_name = item.text()
+
+        # Check if the ligand has been prepared and written to disk
+        prepared = p.s.get("prepared", [])
+        match = next((item for item in prepared if item["ligand"] == lig_name or item["state"] == lig_name), None)
+        if match:
+            sdf_path = w.run.path / match["sdf"]
+            if sdf_path.exists():
+                try:
+                    self.viewer.load_ligand(sdf_path.read_text(encoding="utf-8"), "sdf")
+                except Exception:
+                    pass
+
     def _check(self):
         s, p = self._inputs()
         if not (s or p):
@@ -578,6 +678,8 @@ class LigandsPage(Page):
 
 
 # ---------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------
 class DockingPage(Page):
     title = "Docking"
     blurb = "Validate the setup by redocking the reference ligand, then dock your ligands with AutoDock Vina."
@@ -586,6 +688,7 @@ class DockingPage(Page):
         super().__init__(win)
         cols = QHBoxLayout()
         cols.setSpacing(24)
+
         left = QVBoxLayout()
         left.setSpacing(16)
 
@@ -615,10 +718,10 @@ class DockingPage(Page):
         ev.addWidget(label("Exhaustiveness", "fieldTitle", False))
         ev.addWidget(self.exh)
         ev.addWidget(self.rec_lbl)
-        grid.addWidget(exh_box, 0, 0, Qt.AlignTop)
-        grid.addWidget(field("Poses per ligand", self.poses, "How many binding poses Vina keeps for each ligand. The default is the top 10."), 0, 1, Qt.AlignTop)
-        grid.addWidget(field("Energy range (kcal/mol)", self.erange, "Keep poses within this many kcal/mol of the best one. A wide range stops the top 10 being cut short."), 1, 0, Qt.AlignTop)
-        grid.addWidget(field("CPU threads", self.cpu, "Cores Vina may use. One core stays free so the window stays responsive."), 1, 1, Qt.AlignTop)
+        grid.addWidget(exh_box, 0, 0, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(field("Poses per ligand", self.poses, "How many binding poses Vina keeps for each ligand."), 0, 1, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(field("Energy range (kcal/mol)", self.erange, "Keep poses within this many kcal/mol."), 1, 0, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(field("CPU threads", self.cpu, "Cores Vina may use."), 1, 1, Qt.AlignmentFlag.AlignTop)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         left.addLayout(grid)
@@ -635,20 +738,47 @@ class DockingPage(Page):
             row.addWidget(b_)
         row.addStretch(1)
         left.addLayout(row)
+
         self.val_lbl = label("", "summary")
         self.val_lbl.hide()
         left.addWidget(self.val_lbl)
-        left.addStretch(1)
 
-        right, rv = panel("Progress and Vina output")
+        left.addWidget(label("Progress and Vina output", "h2", False))
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         mono(self.log)
-        self.log.setPlaceholderText("Messages from the run appear here. The complete Vina log is saved with the results.")
-        rv.addWidget(self.log, 1)
-        cols.addLayout(left, 5)
-        cols.addWidget(right, 5)
+        left.addWidget(self.log, 1)
+
+        # --- RIGHT COLUMN: COMPLEX VIEWER + SETTINGS ---
+        right_col = QVBoxLayout()
+        right_col.setSpacing(16)
+
+        self.viewer = MolViewer()
+        right_col.addWidget(self.viewer, 6)
+
+        set_panel, sv = panel("Viewer Settings")
+        self.surf_chk = QCheckBox("Show molecular surface")
+        self.cartoon_chk = QCheckBox("Show protein cartoon")
+        self.cartoon_chk.setChecked(True)
+        self.sticks_chk = QCheckBox("Show ligand sticks")
+        self.sticks_chk.setChecked(True)
+        for chk in (self.surf_chk, self.cartoon_chk, self.sticks_chk):
+            chk.toggled.connect(self._update_viewer_settings)
+            sv.addWidget(chk)
+        sv.addStretch(1)
+        right_col.addWidget(set_panel, 4)
+
+        cols.addLayout(left, 6)
+        cols.addLayout(right_col, 5)  # Slightly wider right column
         self.body.addLayout(cols, 1)
+
+    def _update_viewer_settings(self):
+        if hasattr(self, "viewer"):
+            self.viewer.apply_settings(
+                self.surf_chk.isChecked(),
+                self.cartoon_chk.isChecked(),
+                self.sticks_chk.isChecked()
+            )
 
     def params(self) -> DockParams:
         return DockParams(exhaustiveness=self.exh.value(), num_modes=self.poses.value(), energy_range=self.erange.value(),
@@ -686,7 +816,7 @@ class DockingPage(Page):
         proj, params = w.project, self.params()
         if proj.reference_ready and not proj.validation:
             if QMessageBox.question(self, "No validation yet", "The reference ligand has not been redocked yet. "
-                                    "Run docking without validation?") != QMessageBox.Yes:
+                                    "Run docking without validation?") != QMessageBox.StandardButton.Yes:
                 return
 
         def job(log, progress, cancel):
@@ -710,9 +840,9 @@ class DockingPage(Page):
         self.set_busy(w.busy)
         if p and p.box:
             rec = boxmod.recommended_exhaustiveness(p.box)
-            self.rec_lbl.setText(f"Search depth. Higher is slower and more thorough. Recommended for the current box: {rec} (Vina's default of 8 suits small boxes only).")
+            self.rec_lbl.setText(f"Search depth. Recommended for current box: {rec}.")
             if not self._touched and p.receptor_ready and self.exh.value() != rec:
-                self.exh.blockSignals(True)                      # programmatic change: not "touched"
+                self.exh.blockSignals(True)
                 self.exh.setValue(rec)
                 self.exh.blockSignals(False)
         v = p.validation if p else None
@@ -721,35 +851,109 @@ class DockingPage(Page):
         else:
             self.val_lbl.hide()
 
+        # Load top 1 pose preview into viewer if ready
+        if p and p.receptor_ready:
+            try:
+                rec_path = p.run.path / p.s["receptor"]["protonated_pdb"]
+                lig_path = None
+                if p.reference_ready:
+                    lig_path = p.run.path / p.s["reference"]["sdf"]
+                elif p.s.get("prepared"):
+                    lig_path = p.run.path / p.s["prepared"][0]["sdf"]
+
+                if rec_path.exists() and lig_path and lig_path.exists():
+                    self.viewer.load_complex(
+                        rec_path.read_text(encoding="utf-8"),
+                        lig_path.read_text(encoding="utf-8"),
+                        "pdb", "sdf"
+                    )
+            except Exception:
+                pass
+
 
 # ---------------------------------------------------------------------------------------------------
 class ResultsPage(Page):
     title = "Results"
-    blurb = "Ranked by the predicted binding affinity of each ligand's best pose. Double-click a ligand name to rename it; exports and reports use the new name."
+    blurb = "Ranked by predicted binding affinity. Click any pose to inspect 3D structure or 2D interaction profile."
     HEAD = ["Rank", "Ligand", "Type", "Best state", "Affinity (kcal/mol)", "Est. pKd", "Contact residues", "Polar contacts"]
 
     def __init__(self, win):
         super().__init__(win)
         self._filling = False
-        self.best = label("", "callout")
-        self.best.hide()
-        self.body.addWidget(self.best)
+
+        main_v = QVBoxLayout()
+        main_v.setSpacing(12)
+
+        # Viewer and settings stay left; result tables stack in the right column.
+        content_row = QHBoxLayout()
+        content_row.setSpacing(16)
+
+        viewer_col = QVBoxLayout()
+        viewer_col.setSpacing(8)
+
+        v_header_row = QHBoxLayout()
+        v_header_row.addWidget(label("Interactive Structural Inspector", "h2", False))
+        v_header_row.addStretch(1)
+        self.view_mode = QComboBox()
+        self.view_mode.addItems(["3D Complex Viewer", "2D Interaction Diagram"])
+        self.view_mode.currentIndexChanged.connect(self._load_selected_pose_viewer)
+        v_header_row.addWidget(self.view_mode)
+        self.export_diagram_btn = button("Export 2D PNG…", True)
+        self.export_diagram_btn.setEnabled(False)
+        self.export_diagram_btn.clicked.connect(self._export_2d_diagram)
+        v_header_row.addWidget(self.export_diagram_btn)
+        viewer_col.addLayout(v_header_row)
+
+        self.viewer = MolViewer()
+        self.viewer.setMinimumHeight(300)
+        self.viewer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        viewer_col.addWidget(self.viewer, 1)
+
+        set_panel, sv = panel("Viewer Settings")
+        self.surf_chk = QCheckBox("Show molecular surface")
+        self.cartoon_chk = QCheckBox("Show protein cartoon")
+        self.cartoon_chk.setChecked(True)
+        self.sticks_chk = QCheckBox("Show ligand sticks")
+        self.sticks_chk.setChecked(True)
+        for chk in (self.surf_chk, self.cartoon_chk, self.sticks_chk):
+            chk.toggled.connect(self._update_viewer_settings)
+            sv.addWidget(chk)
+        sv.addStretch(1)
+        set_panel.setMaximumHeight(140)
+        viewer_col.addWidget(set_panel)
+        content_row.addLayout(viewer_col, 1)
+
+        tables_col = QVBoxLayout()
+        tables_col.setSpacing(8)
+        tables_col.addWidget(label("Ranked Ligands", "h2", False))
         self.table = QTableWidget()
         self.table.itemChanged.connect(self._on_edit)
         self.table.itemSelectionChanged.connect(self._show_poses)
         self.table.setMinimumHeight(150)
-        self.body.addWidget(self.table, 2)
-        self.pose_title = label("", "h2", False)
-        self.body.addWidget(self.pose_title)
+        tables_col.addWidget(self.table, 1)
+
+        self.pose_title = label("Poses", "h2", False)
+        tables_col.addWidget(self.pose_title)
         self.pose_table = QTableWidget()
-        self.pose_table.verticalHeader().setDefaultSectionSize(26)
-        self.pose_table.setMinimumHeight(10 * 26 + 38)           # all 10 poses visible without scrolling
-        self.body.addWidget(self.pose_table, 2)
-        self.note = label("Estimated pKd = -dG / (2.303 R T) at 298 K from the Vina score. It is a rough conversion for ranking, not a measured affinity.", "muted")
-        self.body.addWidget(self.note)
+        self.pose_table.verticalHeader().setDefaultSectionSize(22)
+        self.pose_table.setMinimumHeight(150)
+        self.pose_table.itemSelectionChanged.connect(self._load_selected_pose_viewer)
+        tables_col.addWidget(self.pose_table, 1)
+        content_row.addLayout(tables_col, 1)
+
+        self.best = label("", "callout")
+        self.best.hide()
+        main_v.addWidget(self.best)
+        main_v.addLayout(content_row, 1)
+
+        self.note = label("Estimated pKd = -dG / (2.303 R T) at 298 K from Vina score.", "muted")
+        main_v.addWidget(self.note)
+
         self.state_lbl = label("", "muted")
-        self.body.addWidget(self.state_lbl)
-        row = QHBoxLayout()
+        main_v.addWidget(self.state_lbl)
+
+        # Export & Report Action Bar
+        act_row = QHBoxLayout()
         self.csv_btn = button("Export CSV…", True)
         self.log_btn = button("Save Vina log…", True)
         self.folder_btn = button("Open results folder", True)
@@ -763,28 +967,37 @@ class ResultsPage(Page):
         self.report_btn.clicked.connect(self._report)
         self.open_report_btn.clicked.connect(self._open_report)
         for b in (self.csv_btn, self.log_btn, self.folder_btn):
-            row.addWidget(b)
-        row.addStretch(1)
-        row.addWidget(self.open_report_btn)
-        row.addWidget(label("Report type", "muted", False))
-        row.addWidget(self.report_type)
-        row.addWidget(self.report_btn)
-        self.body.addLayout(row)
+            act_row.addWidget(b)
+        act_row.addStretch(1)
+        act_row.addWidget(self.open_report_btn)
+        act_row.addWidget(label("Report type", "muted", False))
+        act_row.addWidget(self.report_type)
+        act_row.addWidget(self.report_btn)
+        main_v.addLayout(act_row)
+
+        self.body.addLayout(main_v, 1)
+
         self._last_report: Path | None = None
         self._rows: list = []
 
-    # ---- editing -------------------------------------------------------------------------------
+    def _update_viewer_settings(self):
+        if hasattr(self, "viewer"):
+            self.viewer.apply_settings(
+                self.surf_chk.isChecked(),
+                self.cartoon_chk.isChecked(),
+                self.sticks_chk.isChecked()
+            )
+
     def _on_edit(self, item):
         if self._filling or item.column() != 1:
             return
         p = self.win.project
         try:
-            p.rename_ligand(item.data(Qt.UserRole), item.text())
-        except Exception as exc:                                     # noqa: BLE001
+            p.rename_ligand(item.data(Qt.ItemDataRole.UserRole), item.text())
+        except Exception as exc:
             QMessageBox.warning(self, "Rename ligand", str(exc))
         self.win.refresh()
 
-    # ---- exports ---------------------------------------------------------------------------------
     def _export(self):
         p = self.win.project
         if not p or not p.results:
@@ -823,12 +1036,12 @@ class ResultsPage(Page):
         elif self.win.run:
             open_path(self.win.run.sub("reports"))
 
-    # ---- display -------------------------------------------------------------------------------------
     def _show_poses(self):
         p = self.win.project
         sel = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
         if not p or not self._rows or not sel:
-            self.pose_title.setText("")
+            self.export_diagram_btn.setEnabled(False)
+            self.pose_title.setText("Poses")
             fill_table(self.pose_table, ["Pose", "Affinity (kcal/mol)", "Est. pKd", "RMSD l.b. (Å)", "RMSD u.b. (Å)"], [])
             return
         r = self._rows[sel[0].row()]
@@ -836,8 +1049,121 @@ class ResultsPage(Page):
         rows = [[k + 1, f"{a:.2f}", f"{thermo.estimate_pkd(a):.2f}",
                  f"{r.rmsd_lb[k]:.2f}" if k < len(r.rmsd_lb) else "", f"{r.rmsd_ub[k]:.2f}" if k < len(r.rmsd_ub) else ""]
                 for k, a in enumerate(r.affinities)]
-        self.pose_title.setText(f"Top {len(rows)} poses of {p.display_state(r)} (ranked by affinity)")
+        self.pose_title.setText(f"Top 10 poses of {p.display_state(r)}")
         fill_table(self.pose_table, ["Pose", "Affinity (kcal/mol)", "Est. pKd", "RMSD l.b. (Å)", "RMSD u.b. (Å)"], rows)
+
+        hh = self.pose_table.horizontalHeader()
+        for i in range(self.pose_table.columnCount()):
+            hh.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+
+        if rows:
+            self.pose_table.selectRow(0)
+
+    def _load_selected_pose_viewer(self):
+        p = self.win.project
+        sel_lig = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+        sel_pose = self.pose_table.selectionModel().selectedRows() if self.pose_table.selectionModel() else []
+        can_load = bool(p and sel_lig and sel_pose and p.receptor_ready)
+        self.export_diagram_btn.setEnabled(can_load and self.view_mode.currentIndex() == 1)
+        if not can_load:
+            return
+
+        r = self._rows[sel_lig[0].row()]
+        pose_idx = sel_pose[0].row()
+
+        rec_path = p.run.path / p.s["receptor"]["protonated_pdb"]
+        pose_path = p.run.path / r.out_pdbqt
+
+        if rec_path.exists() and pose_path.exists():
+            try:
+                from rdkit import Chem
+                from qrksdock.core import contacts
+                from qrksdock.core.validation import pose_mol
+
+                mol = pose_mol(pose_path)
+                conformer = pose_idx if 0 <= pose_idx < mol.GetNumConformers() else 0
+                if self.view_mode.currentIndex() == 1:
+                    report = contacts.analyse(rec_path, pose_path, mol, conformer)
+                    self.viewer.show_2d_interactions(
+                        mol, report.interactions, report.residue_structures, report.thresholds
+                    )
+                else:
+                    pose_text = Chem.MolToMolBlock(mol, confId=conformer)
+
+                    self.viewer.load_complex(
+                        rec_path.read_text(encoding="utf-8"),
+                        pose_text,
+                        "pdb",
+                        "sdf",
+                        self.surf_chk.isChecked(),
+                        self.cartoon_chk.isChecked(),
+                        self.sticks_chk.isChecked()
+                    )
+            except Exception as exc:
+                QMessageBox.warning(self, "Pose viewer", str(exc))
+
+    def _export_2d_diagram(self):
+        p = self.win.project
+        sel_lig = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+        sel_pose = self.pose_table.selectionModel().selectedRows() if self.pose_table.selectionModel() else []
+        if (not self.win.run or not p or not sel_lig or not sel_pose
+                or self.view_mode.currentIndex() != 1):
+            QMessageBox.information(self, "Export 2D PNG", "Select a pose in the 2D interaction view first.")
+            return
+        ligand_name = Path(p.display_state(self._rows[sel_lig[0].row()])).name
+        pose_number = sel_pose[0].row() + 1
+        default_path = self.win.run.sub("results") / (
+            f"{self.win.run.code}_{ligand_name}_pose{pose_number}_2D_interaction.png"
+        )
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export 2D interaction diagram",
+            str(default_path),
+            "PNG image (*.png)",
+        )
+        if not dest:
+            return
+        image_path = Path(dest)
+        if image_path.suffix.lower() != ".png":
+            image_path = image_path.with_suffix(".png")
+        self.export_diagram_btn.setEnabled(False)
+        self.viewer.export_2d_png(lambda png: self._finish_2d_diagram_export(png, image_path))
+
+    def _finish_2d_diagram_export(self, png_result: str | None, image_path: Path):
+        try:
+            self._save_2d_diagram_png(png_result, image_path)
+        finally:
+            p = self.win.project
+            sel_lig = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+            sel_pose = self.pose_table.selectionModel().selectedRows() if self.pose_table.selectionModel() else []
+            self.export_diagram_btn.setEnabled(
+                bool(p and p.receptor_ready and sel_lig and sel_pose and self.view_mode.currentIndex() == 1)
+            )
+
+    def _save_2d_diagram_png(self, png_result: str | None, image_path: Path):
+        if not isinstance(png_result, str) or not png_result:
+            QMessageBox.warning(self, "Export 2D PNG", "The current 2D interaction diagram is not ready to export.")
+            return
+        if png_result.startswith("ERROR: "):
+            QMessageBox.warning(self, "Export 2D PNG", png_result.removeprefix("ERROR: "))
+            return
+        data_url_prefix = "data:image/png;base64,"
+        if not png_result.startswith(data_url_prefix):
+            QMessageBox.warning(self, "Export 2D PNG", "The diagram exporter returned an invalid image.")
+            return
+        try:
+            png_data = base64.b64decode(png_result[len(data_url_prefix):], validate=True)
+        except (binascii.Error, ValueError):
+            QMessageBox.warning(self, "Export 2D PNG", "The diagram exporter returned invalid PNG data.")
+            return
+        image = QImage.fromData(png_data)
+        if image.isNull() or image.width() != 1920 or image.height() != 1200:
+            QMessageBox.warning(self, "Export 2D PNG", "The exported image has invalid dimensions or data.")
+            return
+        if not image.save(str(image_path)):
+            QMessageBox.warning(self, "Export 2D PNG", f"Could not save the image to:\n{image_path}")
+            return
+        QMessageBox.information(self, "Export 2D PNG", f"Saved interaction diagram:\n{image_path}")
 
     def refresh(self):
         w = self.win
@@ -863,6 +1189,11 @@ class ResultsPage(Page):
                          len(r.contact_residues), len(r.polar_contacts)] for i, r in enumerate(res, 1)]
                 fill_table(self.table, self.HEAD, rows, ["#FDF1C9"] + [None] * (len(rows) - 1), 1,
                            editable_cols={1}, row_ids=[r.ligand for r in res])
+
+                hh = self.table.horizontalHeader()
+                for i in range(self.table.columnCount()):
+                    hh.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+
                 self.state_lbl.setText(f"Run ID {p.s.get('run_id', '')}   |   {w.run.client}   {w.run.code}")
         finally:
             self._filling = False

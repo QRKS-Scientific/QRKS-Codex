@@ -1,12 +1,23 @@
 """Docking search box (blind, around a reference ligand, or manual) and exhaustiveness advice."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, asdict
 from pathlib import Path
+from typing import TypeAlias
 
 import numpy as np
 
 from qrksdock.core import rules
+
+Vector3: TypeAlias = tuple[float, float, float]
+
+
+def _vector3(values: Iterable[float]) -> Vector3:
+    coords = tuple(float(value) for value in values)
+    if len(coords) != 3:
+        raise ValueError("A box vector must contain exactly three coordinates.")
+    return coords[0], coords[1], coords[2]
 
 
 @dataclass
@@ -52,19 +63,22 @@ def box_blind(receptor_pdb: Path) -> Box:
     xyz = read_pdb_xyz(receptor_pdb)
     pad = rules.docking_defaults()["box_padding_blind"]
     lo, hi = xyz.min(axis=0), xyz.max(axis=0)
-    return Box(tuple(float(v) for v in (lo + hi) / 2), tuple(float(v) for v in (hi - lo + 2 * pad)), "blind")
+    center = _vector3((lo + hi) / 2)
+    size = _vector3(hi - lo + 2 * pad)
+    return Box(center, size, "blind")
 
 
-def box_from_reference(centroid, extent) -> Box:
+def box_from_reference(centroid: Iterable[float], extent: Iterable[float]) -> Box:
     cfg = rules.docking_defaults()
-    size = tuple(max(float(e) + 2 * cfg["box_padding_ligand"], cfg["box_min_size"]) for e in extent)
-    return Box(tuple(float(c) for c in centroid), size, "reference")
+    size = _vector3(max(float(e) + 2 * cfg["box_padding_ligand"], cfg["box_min_size"]) for e in extent)
+    return Box(_vector3(centroid), size, "reference")
 
 
-def box_manual(center, size) -> Box:
-    if any(s <= 0 for s in size):
+def box_manual(center: Iterable[float], size: Iterable[float]) -> Box:
+    center_vector, size_vector = _vector3(center), _vector3(size)
+    if any(side <= 0 for side in size_vector):
         raise ValueError("Box sizes must be positive.")
-    return Box(tuple(float(c) for c in center), tuple(float(s) for s in size), "manual")
+    return Box(center_vector, size_vector, "manual")
 
 
 def recommended_exhaustiveness(box: Box) -> int:

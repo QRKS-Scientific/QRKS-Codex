@@ -44,7 +44,10 @@ def system_check(vina_path: str | None = None) -> list[dict[str, Any]]:
         add("Qt (PySide6)", False, f"cannot import ({exc})")
     inter = (paths.asset("fonts") / "Inter-Regular.otf").exists() and (paths.asset("fonts") / "InterDisplay-Bold.otf").exists()
     add("Interface font", inter, "SF Pro (the macOS system font) on Mac; bundled Inter on other systems")
-    add("Report font", (paths.asset("fonts") / "Montserrat-Regular.ttf").exists(), "Montserrat (replaced when the Canva template is added)")
+    report_fonts = all((paths.asset("fonts") / font).exists()
+                       for font in ("PublicSans-Regular.ttf", "PublicSans-Medium.ttf", "PublicSans-Bold.ttf",
+                                    "PublicSans-ExtraBold.ttf", "PublicSans-Italic.ttf", "PublicSans-BoldItalic.ttf"))
+    add("Report font", report_fonts, "Bundled Public Sans Regular, Medium, Bold, ExtraBold, and Italic")
     try:
         from qrksdock.net.config import server_url
         from qrksdock.net.store import default_store

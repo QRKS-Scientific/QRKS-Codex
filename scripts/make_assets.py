@@ -23,18 +23,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def resize_to_height(im: Image.Image, height: int) -> Image.Image:
     w, h = im.size
-    return im.resize((round(w * height / h), height), Image.LANCZOS)
+    return im.resize((round(w * height / h), height), Image.Resampling.LANCZOS)
 
 
 def resize_to_width(im: Image.Image, width: int) -> Image.Image:
     w, h = im.size
-    return im.resize((width, round(h * width / w)), Image.LANCZOS)
+    return im.resize((width, round(h * width / w)), Image.Resampling.LANCZOS)
 
 
 def white_to_alpha(im: Image.Image) -> Image.Image:
     """Convert an opaque logo on a white background to a transparent PNG."""
     a = np.asarray(im.convert("RGB")).astype(np.float32)
-    alpha = 255.0 - a.min(axis=2)                      # how far from white
+    alpha = np.subtract(255.0, a.min(axis=2))           # how far from white
     safe = np.maximum(alpha, 1.0)[..., None] / 255.0
     rgb = (a - 255.0 * (1.0 - safe)) / safe            # un-premultiply against white
     rgb = np.clip(rgb, 0, 255)

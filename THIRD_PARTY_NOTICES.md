@@ -6,7 +6,8 @@ QRKSDock bundles or depends on the open-source software below. License names are
 | --- | --- | --- | --- |
 | AutoDock Vina (bundled executable) | 1.2.7 | Apache-2.0 | https://github.com/ccsb-scripps/AutoDock-Vina |
 | Inter font (bundled, interface text) | 4.0 | SIL Open Font License 1.1 | assets/fonts/LICENSE-Inter.txt |
-| Montserrat font (bundled, reports until the Canva template is added) | 7.x | SIL Open Font License 1.1 | assets/fonts/LICENSE-Montserrat.txt |
+| Public Sans font (bundled, report text) | 2.001 | SIL Open Font License 1.1 (GSA modifications under CC0) | https://github.com/uswds/public-sans; assets/fonts/LICENSE-PublicSans.txt |
+| Montserrat font (legacy bundled asset; unused by the current report) | 7.x | SIL Open Font License 1.1 | assets/fonts/LICENSE-Montserrat.txt |
 | PySide6-Essentials | 6.12.0 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only | https://pyside.org |
 | rdkit | 2026.9.1 | BSD-3-Clause | https://github.com/kuelumbus/rdkit-pypi |
 | meeko | 0.8.0 | GNU Lesser General Public License v2 or later (LGPLv2+) | https://github.com/forlilab/meeko |

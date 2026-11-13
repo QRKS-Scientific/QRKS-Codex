@@ -9,6 +9,21 @@ All notable changes to QRKSDock are recorded here. Format: [Keep a Changelog](ht
 Versions stay below 1.0.0 until the first paid client delivery has been produced and checked on both Windows and Mac.
 The version number is written only in `src/qrksdock/__init__.py`.
 
+## [0.6.0] - 2026-11-13
+
+### Added
+- **Interactive 2D interaction diagrams:** display the selected ligand pose with nearby residue structures and geometric contact candidates.
+- **Diagram editing and export:** reposition the ligand and residues, rotate residues, reshape hydrophobic brackets, and export the edited diagram as a high-resolution PNG.
+- Added the supplied report cover and a Public Sans font hierarchy to PDF reports.
+
+### Changed
+- Reorganized the report with updated branding, Methods, lead/checker signatories, confidentiality statement, and a binding-affinity summary without the molecule Type column.
+- Updated the Results page to expose the selected pose's interactive 2D diagram alongside the existing 3D viewer.
+
+### Fixed
+- Improved selected-pose atom reconstruction and mapping for interaction diagrams.
+- Corrected the molecular-surface control so it updates the receptor surface.
+
 ## [0.5.1] - 2026-11-12
 
 ### Added
@@ -45,7 +60,6 @@ The version number is written only in `src/qrksdock/__init__.py`.
 - Windows and Mac keychain behaviour is checked by the installers' self-test in GitHub Actions, not here.
 - "Free" hosting has catches: see `server/README.md`. The server runs on any Ubuntu VM.
 - The accounts file from 0.4.0 is unused whenever a server is configured. Set up accounts on the server with `python -m app.admin init`.
-- Next: v0.6.0 report changes (Canva layout, peptide section rule, PyMOL images).
 
 ## [0.4.1] - 2026-11-07
 

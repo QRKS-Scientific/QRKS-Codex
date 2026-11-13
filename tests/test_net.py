@@ -67,7 +67,9 @@ def test_login_persists_session_and_maps_initials(fake_api):
         {"email": "lem@qrks.com", "password": "correct-horse-battery-staple"}
     )
 
-    saved = json.loads(store.get("session"))
+    session = store.get("session")
+    assert session is not None
+    saved = json.loads(session)
     assert saved["initials"] == "LEM"
     assert saved["access_token"] == "tok_access_123"
     assert saved["refresh_token"] == "tok_refresh_456"

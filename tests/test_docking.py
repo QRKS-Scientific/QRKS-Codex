@@ -1,14 +1,24 @@
 import sys
+from typing import TypedDict
 
 import pytest
 from rdkit import Chem
 
 from qrksdock.core import box as B
+from qrksdock.core import contacts
 from qrksdock.core import ligands as L
 from qrksdock.core import receptor as R
 from qrksdock.core import validation as VAL
 from qrksdock.core import vina_runner as V
 from conftest import slow
+
+
+class VinaOptions(TypedDict):
+    exhaustiveness: int
+    num_modes: int
+    energy_range: float
+    seed: int
+    cpu: int
 
 
 def test_vina_version(vina_exe):
@@ -33,7 +43,7 @@ def test_same_seed_gives_identical_results(tmp_path, data, vina_exe):
     pr = R.prepare_receptor(data / "1AFS_A_clean.pdb", tmp_path / "rec")
     ref = L.prepare_reference_ligand(data / "1AFS_TES.sdf", tmp_path / "ref")
     box = B.box_from_reference(ref.centroid, ref.extent)
-    kw = dict(exhaustiveness=4, num_modes=5, energy_range=3, seed=7, cpu=1)
+    kw: VinaOptions = {"exhaustiveness": 4, "num_modes": 5, "energy_range": 3, "seed": 7, "cpu": 1}
     a = V.run_vina(vina_exe, pr.pdbqt, ref.pdbqt, box, tmp_path / "a.pdbqt", **kw)
     b = V.run_vina(vina_exe, pr.pdbqt, ref.pdbqt, box, tmp_path / "b.pdbqt", **kw)
     assert [p.affinity for p in a.poses] == [p.affinity for p in b.poses]
@@ -49,6 +59,11 @@ def test_cofactor_dependent_redocking_is_flagged(tmp_path, data, vina_exe):
                      energy_range=3, seed=42, cpu=1)
     val = VAL.evaluate(run.out_pdbqt, ref.mol, [p.affinity for p in run.poses])
     assert val.passed is False and val.rmsd_top > val.threshold
+    pose_mol = VAL.pose_mol(run.out_pdbqt)
+    diagram = contacts.analyse(pr.protonated_pdb, run.out_pdbqt, pose_mol)
+    heavy_atoms = Chem.RemoveHs(pose_mol).GetNumAtoms()
+    assert diagram.interactions
+    assert all(0 <= item.ligand_atom < heavy_atoms for item in diagram.interactions)
 
 
 @slow

@@ -18,6 +18,7 @@ import json
 import secrets
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -37,7 +38,7 @@ def main() -> int:
     ap.add_argument("--reset", metavar="INITIALS", help="reset one account only, e.g. JER")
     args = ap.parse_args()
     target = ROOT / "src" / "qrksdock" / "data" / "accounts.json"
-    current = json.loads(target.read_text(encoding="utf-8")) if target.exists() else {"accounts": {}}
+    current: dict[str, Any] = json.loads(target.read_text(encoding="utf-8")) if target.exists() else {"accounts": {}}
     roster = {p["initials"]: p for p in rules.roster()}
     who = [args.reset.upper()] if args.reset else list(roster)
     unknown = [w for w in who if w not in roster]

@@ -34,9 +34,9 @@ class ChangePasswordDialog(QDialog):
         form = QFormLayout()
         form.setVerticalSpacing(10)
         self.new = QLineEdit()
-        self.new.setEchoMode(QLineEdit.Password)
+        self.new.setEchoMode(QLineEdit.EchoMode.Password)
         self.again = QLineEdit()
-        self.again.setEchoMode(QLineEdit.Password)
+        self.again.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow("New password", self.new)
         form.addRow("Repeat it", self.again)
         lay.addLayout(form)
@@ -97,7 +97,8 @@ class LoginPage(QWidget):
         v.setContentsMargins(56, 48, 56, 40)
         v.addStretch(2)
         mark = QLabel()
-        mark.setPixmap(QPixmap(str(paths.asset("logos", "brandmark_white.png"))).scaledToHeight(112, Qt.SmoothTransformation))
+        mark.setPixmap(QPixmap(str(paths.asset("logos", "brandmark_white.png"))).scaledToHeight(
+            112, Qt.TransformationMode.SmoothTransformation))
         v.addWidget(mark)
         v.addSpacing(26)
         title = QLabel("QRKSDock")
@@ -189,9 +190,9 @@ class LoginPage(QWidget):
 
         self.change_btn = QPushButton("Change")
         self.change_btn.setObjectName("ghost")
-        self.change_btn.setCursor(Qt.PointingHandCursor)
+        self.change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.change_btn.clicked.connect(self._back_to_email)
-        card_row.addWidget(self.change_btn, 0, Qt.AlignVCenter)
+        card_row.addWidget(self.change_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
         a_lay.addWidget(self.profile_card)
 
@@ -199,15 +200,16 @@ class LoginPage(QWidget):
         a_lay.addWidget(label("Password", "fieldTitle", False))
         pw_row = QHBoxLayout()
         self.password = QLineEdit()
-        self.password.setEchoMode(QLineEdit.Password)
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setPlaceholderText("Enter your password")
         self.password.textChanged.connect(self._on_password_changed)
         self.password.returnPressed.connect(self._submit)
         self.show_btn = QPushButton("Show")
         self.show_btn.setObjectName("ghost")
         self.show_btn.setCheckable(True)
-        self.show_btn.setCursor(Qt.PointingHandCursor)
-        self.show_btn.toggled.connect(lambda on: (self.password.setEchoMode(QLineEdit.Normal if on else QLineEdit.Password),
+        self.show_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.show_btn.toggled.connect(lambda on: (
+            self.password.setEchoMode(QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password),
                                                   self.show_btn.setText("Hide" if on else "Show")))
         pw_row.addWidget(self.password, 1)
         pw_row.addWidget(self.show_btn)
@@ -288,7 +290,7 @@ class LoginPage(QWidget):
         self._fade_anim.setDuration(220)
         self._fade_anim.setStartValue(0.0)
         self._fade_anim.setEndValue(1.0)
-        self._fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade_anim.start()
 
         self.password.setFocus()
@@ -347,7 +349,7 @@ class LoginPage(QWidget):
             return
         if result.must_change:
             dlg = ChangePasswordDialog(self.store, email, pw, self)
-            if dlg.exec() != QDialog.Accepted:
+            if dlg.exec() != QDialog.DialogCode.Accepted:
                 self._error("You need to choose your own password before you can continue.")
                 return
         matched = next((a for a in self.store.accounts() if _account_email(a) == email.lower()), None)
