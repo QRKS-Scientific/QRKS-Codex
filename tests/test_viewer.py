@@ -27,7 +27,29 @@ def test_bundled_3dmol_javascript_loads():
 
     def on_library_loaded(available):
         result["available"] = available
-        loop.quit()
+        if not available:
+            loop.quit()
+            return
+
+        def on_box_added(call):
+            result["box_call"] = json.loads(call)
+            loop.quit()
+
+        viewer.web.page().runJavaScript(
+            """
+            (() => {
+                let call;
+                const addBox = viewer.addBox.bind(viewer);
+                viewer.addBox = (...args) => {
+                    call = args;
+                    return addBox(...args);
+                };
+                window.addBox({x: 1, y: 2, z: 3}, {x: 18, y: 20, z: 22});
+                return JSON.stringify(call);
+            })()
+            """,
+            on_box_added,
+        )
 
     def on_load(ok):
         if not ok:
@@ -46,6 +68,10 @@ def test_bundled_3dmol_javascript_loads():
     viewer.close()
     assert "error" not in result, result.get("error")
     assert result["available"], "Bundled 3Dmol.js did not expose createViewer"
+    box_call = result["box_call"]
+    assert len(box_call) == 1
+    assert box_call[0]["center"] == {"x": 1, "y": 2, "z": 3}
+    assert box_call[0]["dimensions"] == {"w": 18, "h": 20, "d": 22}
 
 
 def test_diagram_draws_nh2_hydrogens_as_separate_atoms():

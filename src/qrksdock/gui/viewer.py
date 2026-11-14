@@ -174,7 +174,13 @@ HTML_TEMPLATE = f"""
         window.addBox = function(center, size) {{
             if (!viewer) return;
             if (typeof viewer.addBox === 'function') {{
-                viewer.addBox(center, size, {{ color: '#ff4d9d', wireframe: true, opacity: 0.9 }});
+                viewer.addBox({{
+                    center,
+                    dimensions: {{ w: size.x, h: size.y, d: size.z }},
+                    color: '#ff4d9d',
+                    wireframe: true,
+                    opacity: 0.9
+                }});
                 viewer.render();
                 return;
             }}
